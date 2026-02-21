@@ -30,10 +30,14 @@ echo "Downloading $ASSET..."
 
 # Download and extract
 cd /tmp
+rm -rf /tmp/sentra-install-tmp
+mkdir -p /tmp/sentra-install-tmp
+cd /tmp/sentra-install-tmp
 curl -sL "https://github.com/sundarsub/sentra/releases/latest/download/$ASSET" | tar xz
 
 # Install binary
-sudo mv sentra /usr/local/bin/
+sudo mv /tmp/sentra-install-tmp/sentra /usr/local/bin/
+rm -rf /tmp/sentra-install-tmp
 echo "✓ Installed sentra to /usr/local/bin/"
 
 # Create config directory and download example policy
