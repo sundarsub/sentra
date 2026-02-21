@@ -1,0 +1,379 @@
+# Sentra - Execution Governance Policy
+# =====================================
+# This policy file defines rules for the Sentra execution gateway.
+# Rules are evaluated in order - first match wins.
+#
+# Version: 1.0
+
+version: "1.0"
+mode: enforce    # enforce = block denied commands, audit = log only
+default: deny    # deny = block unknown commands, allow = permit unknown
+
+# Rate limiting configuration
+rate_limit:
+  max_commands: 60   # Maximum commands per identity per window
+  window_seconds: 60 # Sliding window duration in seconds
+
+rules:
+  # ═══════════════════════════════════════════════════════════════════════════
+  # SHELL INJECTION PREVENTION (highest priority - evaluated first)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: block_shell_injection
+    match:
+      args_pattern: "(\\$\\(|`|\\s\\|\\s|\\s;\\s|\\s&&\\s|\\s\\|\\|\\s)"
+    effect: deny
+    reason: "Shell metacharacter injection blocked - pipes, command chaining, and subshells are not allowed"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # VERSION CONTROL - GIT
+  # Read-only operations allowed, write operations blocked
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: git_read_only
+    match:
+      executable: "^git$"
+      args_pattern: "^(clone|pull|fetch|status|diff|log|show|branch|ls-files|stash|tag|describe|rev-parse|remote\\s+-v|config\\s+--list)"
+    effect: allow
+
+  - id: git_add_commit
+    match:
+      executable: "^git$"
+      args_pattern: "^(add|commit|checkout|switch|restore|merge|rebase|cherry-pick)"
+    effect: allow
+
+  - id: git_block_push
+    match:
+      executable: "^git$"
+      args_pattern: "^push"
+    effect: deny
+    reason: "Git push is blocked - changes must be reviewed before pushing"
+
+  - id: git_block_remote_modify
+    match:
+      executable: "^git$"
+      args_pattern: "^remote\\s+(add|remove|rename|set-url)"
+    effect: deny
+    reason: "Modifying git remotes is blocked"
+
+  - id: git_block_force
+    match:
+      executable: "^git$"
+      args_pattern: "(--force|-f|reset\\s+--hard|clean\\s+-fd)"
+    effect: deny
+    reason: "Destructive git operations (force push, hard reset, clean) are blocked"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # SAFE READ COMMANDS
+  # Common commands for reading/exploring files and system info
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: safe_read_commands
+    match:
+      executable: "^(ls|cat|head|tail|less|more|grep|egrep|fgrep|rg|ag|ack|find|fd|echo|pwd|whoami|id|date|cal|env|printenv|which|whereis|whatis|file|stat|du|df|wc|sort|uniq|diff|cmp|comm|tr|cut|paste|join|split|tee|xargs|basename|dirname|realpath|readlink|tree|bat|exa|lsd)$"
+    effect: allow
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # FILE OPERATIONS
+  # Basic file manipulation (with sensitive file protection below)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: file_ops_basic
+    match:
+      executable: "^(cp|mv|mkdir|touch|rm|rmdir|ln)$"
+    effect: allow
+
+  - id: archive_ops
+    match:
+      executable: "^(tar|zip|unzip|gzip|gunzip|bzip2|bunzip2|xz|7z|rar)$"
+    effect: allow
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # BLOCK SENSITIVE FILE ACCESS
+  # Deny access to credentials, secrets, and system files
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: block_env_files
+    match:
+      args_pattern: "\\.env"
+    effect: deny
+    reason: "Access to .env files is blocked - may contain secrets"
+
+  - id: block_ssh_keys
+    match:
+      args_pattern: "\\.ssh/"
+    effect: deny
+    reason: "Access to SSH directory is blocked"
+
+  - id: block_credentials
+    match:
+      args_pattern: "(credentials|secrets|password|passwd|token|apikey|api_key|private_key)\\.?(json|yaml|yml|txt|env|cfg|conf|ini)?$"
+    effect: deny
+    reason: "Access to credential files is blocked"
+
+  - id: block_pem_keys
+    match:
+      args_pattern: "\\.(pem|key|p12|pfx|jks)$"
+    effect: deny
+    reason: "Access to private key files is blocked"
+
+  - id: block_system_files
+    match:
+      args_pattern: "^/(etc/passwd|etc/shadow|etc/sudoers)"
+    effect: deny
+    reason: "Access to system authentication files is blocked"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # PERMISSIONS
+  # Allow safe permission changes, block dangerous ones
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: chmod_safe
+    match:
+      executable: "^chmod$"
+      args_pattern: "^(644|755|600|400|700|664|775)\\s"
+    effect: allow
+
+  - id: chmod_symbolic_safe
+    match:
+      executable: "^chmod$"
+      args_pattern: "^[ugo]?[+-][rwx]+\\s"
+    effect: allow
+
+  - id: chmod_block_world_write
+    match:
+      executable: "^chmod$"
+      args_pattern: "(777|666|o\\+w)"
+    effect: deny
+    reason: "World-writable permissions are blocked"
+
+  - id: chmod_block_setuid
+    match:
+      executable: "^chmod$"
+      args_pattern: "(4[0-7]{3}|u\\+s|\\+s)"
+    effect: deny
+    reason: "Setuid/setgid bits are blocked"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # NETWORK - CURL/WGET
+  # Allow fetching from safe domains, block internal network access
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: curl_block_internal
+    match:
+      executable: "^(curl|wget|http|httpie)$"
+      args_pattern: "(127\\.|localhost|0\\.0\\.0\\.0|10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.|192\\.168\\.|169\\.254\\.)"
+    effect: deny
+    reason: "SSRF protection: access to internal/private networks is blocked"
+
+  - id: curl_allow
+    match:
+      executable: "^(curl|wget|http|httpie)$"
+    effect: allow
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # PACKAGE MANAGERS
+  # Allow package installation and management
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: npm_allow
+    match:
+      executable: "^(npm|npx|yarn|pnpm|bun)$"
+    effect: allow
+
+  - id: pip_allow
+    match:
+      executable: "^(pip|pip3|pipx|poetry|pdm|uv)$"
+    effect: allow
+
+  - id: cargo_allow
+    match:
+      executable: "^cargo$"
+    effect: allow
+
+  - id: go_allow
+    match:
+      executable: "^go$"
+    effect: allow
+
+  - id: gem_allow
+    match:
+      executable: "^(gem|bundle|bundler)$"
+    effect: allow
+
+  - id: composer_allow
+    match:
+      executable: "^(composer|php)$"
+    effect: allow
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # BUILD AND TEST TOOLS
+  # Allow compilers, build systems, and test runners
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: compilers
+    match:
+      executable: "^(gcc|g\\+\\+|clang|clang\\+\\+|rustc|javac|scalac|kotlinc|swiftc|tsc)$"
+    effect: allow
+
+  - id: build_systems
+    match:
+      executable: "^(make|cmake|ninja|gradle|mvn|maven|ant|bazel|buck|meson|scons)$"
+    effect: allow
+
+  - id: interpreters
+    match:
+      executable: "^(python|python3|python2|node|ruby|perl|php|lua|julia|R|Rscript)$"
+    effect: allow
+
+  - id: test_runners
+    match:
+      executable: "^(jest|mocha|pytest|py\\.test|rspec|phpunit|cargo|go|npm|yarn)$"
+      args_pattern: "(test|spec)"
+    effect: allow
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # EDITORS AND TOOLS
+  # Allow common development tools
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: editors
+    match:
+      executable: "^(vi|vim|nvim|nano|emacs|code|subl|atom|gedit|kate|micro|helix)$"
+    effect: allow
+
+  - id: formatters_linters
+    match:
+      executable: "^(prettier|eslint|rubocop|black|flake8|pylint|mypy|tsc|rustfmt|gofmt|goimports|clang-format)$"
+    effect: allow
+
+  - id: docker_basic
+    match:
+      executable: "^docker$"
+      args_pattern: "^(ps|images|logs|inspect|stats|top|version|info)"
+    effect: allow
+
+  - id: docker_block_privileged
+    match:
+      executable: "^docker$"
+      args_pattern: "(--privileged|--cap-add|--security-opt|--pid=host|--network=host)"
+    effect: deny
+    reason: "Privileged Docker operations are blocked"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # DANGEROUS COMMANDS - ALWAYS DENY
+  # Privilege escalation and system administration
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: block_sudo
+    match:
+      executable: "^sudo$"
+    effect: deny
+    reason: "Privilege escalation via sudo is blocked"
+
+  - id: block_su
+    match:
+      executable: "^(su|doas|pkexec|runuser)$"
+    effect: deny
+    reason: "Privilege escalation is blocked"
+
+  - id: block_user_management
+    match:
+      executable: "^(useradd|userdel|usermod|groupadd|groupdel|groupmod|adduser|deluser|addgroup|delgroup)$"
+    effect: deny
+    reason: "User/group management is blocked"
+
+  - id: block_chown
+    match:
+      executable: "^chown$"
+    effect: deny
+    reason: "Changing file ownership is blocked"
+
+  - id: block_system_control
+    match:
+      executable: "^(systemctl|service|init|initctl|launchctl|rc-service)$"
+    effect: deny
+    reason: "System service management is blocked"
+
+  - id: block_shutdown
+    match:
+      executable: "^(shutdown|reboot|poweroff|halt|init)$"
+    effect: deny
+    reason: "System shutdown/reboot is blocked"
+
+  - id: block_kernel
+    match:
+      executable: "^(insmod|rmmod|modprobe|sysctl)$"
+    effect: deny
+    reason: "Kernel module and sysctl operations are blocked"
+
+  - id: block_mount
+    match:
+      executable: "^(mount|umount|losetup)$"
+    effect: deny
+    reason: "Mount operations are blocked"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # DANGEROUS NETWORK TOOLS - ALWAYS DENY
+  # Block raw network access and tunneling
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: block_netcat
+    match:
+      executable: "^(nc|netcat|ncat|socat)$"
+    effect: deny
+    reason: "Raw network tools are blocked - use curl/wget for HTTP requests"
+
+  - id: block_ssh
+    match:
+      executable: "^(ssh|scp|sftp|rsync)$"
+    effect: deny
+    reason: "SSH/SCP is blocked - direct remote access not allowed"
+
+  - id: block_telnet_ftp
+    match:
+      executable: "^(telnet|ftp|tftp|rsh|rlogin|rcp)$"
+    effect: deny
+    reason: "Legacy network protocols are blocked"
+
+  - id: block_nmap
+    match:
+      executable: "^(nmap|masscan|zmap|nikto)$"
+    effect: deny
+    reason: "Network scanning tools are blocked"
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # MISC UTILITIES
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - id: misc_safe
+    match:
+      executable: "^(clear|reset|history|alias|type|time|timeout|watch|yes|true|false|seq|shuf|rev|tac|nl|fmt|fold|column|expand|unexpand|od|xxd|hexdump|md5sum|sha1sum|sha256sum|sha512sum|base64|uuidgen|jq|yq|fx|gron)$"
+    effect: allow
+
+  - id: man_help
+    match:
+      executable: "^(man|info|help|apropos)$"
+    effect: allow
+
+  - id: process_view
+    match:
+      executable: "^(ps|top|htop|btop|pgrep|pidof|pstree|lsof|fuser)$"
+    effect: allow
+
+  - id: block_kill
+    match:
+      executable: "^(kill|killall|pkill)$"
+    effect: deny
+    reason: "Process termination is blocked"
+
+  - id: disk_info
+    match:
+      executable: "^(df|du|ncdu|lsblk|blkid|fdisk|parted)$"
+      args_pattern: "^(-[lah]|--list|--help)?$"
+    effect: allow
+
+  - id: network_info
+    match:
+      executable: "^(ip|ifconfig|netstat|ss|route|arp|ping|traceroute|dig|nslookup|host)$"
+    effect: allow

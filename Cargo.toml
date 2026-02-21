@@ -1,0 +1,42 @@
+[package]
+name = "sentra"
+version = "0.1.0"
+edition = "2021"
+description = "Sentra - Universal Execution Governance Gateway"
+authors = ["Sundar Subramaniam"]
+license = "Apache-2.0"
+repository = "https://github.com/sundarsubramaniam/sentra"
+keywords = ["security", "shell", "policy", "governance", "audit"]
+categories = ["command-line-utilities", "development-tools"]
+readme = "README.md"
+
+[dependencies]
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1.0"
+
+# Pattern matching
+regex = "1.10"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+rustyline = "14.0"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# System info
+hostname = "0.4"
+users = "0.11"
+
+# Output formatting
+colored = "2.1"
+
+# UUID for session tracking
+uuid = { version = "1.7", features = ["v4"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true

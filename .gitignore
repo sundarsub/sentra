@@ -1,0 +1,25 @@
+# Build artifacts
+/target/
+
+# Audit logs
+*.jsonl
+
+# OS files
+.DS_Store
+*.swp
+*.swo
+*~
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Distribution
+/dist/
+
+# Local docs
+/docs/
+
+# Local policy variations
+/policies/
