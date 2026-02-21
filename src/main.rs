@@ -21,11 +21,11 @@ use std::time::Instant;
 #[command(about = "Universal execution governance gateway with argument-level policy enforcement", long_about = None)]
 struct Args {
     /// Path to policy YAML file
-    #[arg(short, long, default_value = "./policy.yaml")]
+    #[arg(short, long, default_value = "/etc/sentra/policy.yaml")]
     policy: String,
 
     /// Path to audit log file
-    #[arg(short, long, default_value = "./sentra_audit.jsonl")]
+    #[arg(short, long, default_value = "/var/log/sentra_audit.jsonl")]
     log: String,
 
     /// Override policy mode (enforce or audit)
