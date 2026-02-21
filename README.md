@@ -15,6 +15,16 @@ Sentra is a policy-enforced shell that provides argument-level command governanc
 
 ## Installation
 
+### Quick Install (Recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sundarsub/sentra/main/install.sh | bash
+```
+
+This installs:
+- Binary to `/usr/local/bin/sentra`
+- Default policy to `/etc/sentra/policy.yaml`
+
 ### From Source
 
 ```bash
