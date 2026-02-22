@@ -427,12 +427,18 @@ rules:
     effect: deny
     reason: "Filesystem creation is blocked"
 
+  # Allow fdisk/parted in list mode (read-only)
+  - id: allow_fdisk_list
+    match:
+      executable: "^(fdisk|parted|gdisk|sgdisk)$"
+      args_pattern: "(-l|--list)"
+    effect: allow
+
   - id: block_fdisk_write
     match:
       executable: "^(fdisk|parted|gdisk|sgdisk)$"
-      args_pattern: "(?!.*(-l|--list))"
     effect: deny
-    reason: "Disk partitioning is blocked"
+    reason: "Disk partitioning is blocked (use -l for read-only)"
 
   # ===========================================================================
   # SHELL INJECTION PREVENTION (highest priority - evaluated first)
