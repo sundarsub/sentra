@@ -6,8 +6,8 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use sha2::{Sha256, Digest};
 
-#[cfg(target_os = "linux")]
-use sentra::cgroup::{CgroupController, CgroupLimits};
+// Import cgroup types - these have stub implementations on non-Linux
+use crate::cgroup::{CgroupController, CgroupLimits};
 
 /// Request to execute code in sandbox
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
