@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use sha2::{Sha256, Digest};
 
 #[cfg(target_os = "linux")]
-use crate::cgroup::{CgroupController, CgroupLimits};
+use sentra::cgroup::{CgroupController, CgroupLimits};
 
 /// Request to execute code in sandbox
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
