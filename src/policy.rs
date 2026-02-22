@@ -1,5 +1,6 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -96,6 +97,84 @@ impl Default for RateLimitConfig {
     }
 }
 
+// ============================================================================
+// v2.0 Schema Structures - Profiles, Capabilities, and Syscall Profiles
+// ============================================================================
+
+/// Filesystem defaults for a sandbox profile
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct FsDefaults {
+    pub cwd: String,
+    pub read_allow: Vec<String>,
+    pub write_allow: Vec<String>,
+    #[serde(default)]
+    pub protected_deny: Vec<String>,
+}
+
+/// Resource limits defaults for a sandbox profile
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct LimitsDefaults {
+    pub timeout_sec: u64,
+    #[serde(default = "default_cpu_max")]
+    pub cpu_max_percent: u32,
+    pub mem_max_mb: u64,
+    pub pids_max: u32,
+    #[serde(default = "default_stdout_max")]
+    pub max_stdout_bytes: usize,
+    #[serde(default = "default_stderr_max")]
+    pub max_stderr_bytes: usize,
+}
+
+fn default_cpu_max() -> u32 {
+    50
+}
+
+fn default_stdout_max() -> usize {
+    200_000
+}
+
+fn default_stderr_max() -> usize {
+    200_000
+}
+
+/// Sandbox profile configuration for Python execution
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SandboxProfile {
+    pub runner: String,
+    pub python_bin: String,
+    #[serde(default)]
+    pub deny_spawn_processes: bool,
+    #[serde(default = "default_network_deny")]
+    pub default_network: String,
+    pub fs_defaults: FsDefaults,
+    pub limits_defaults: LimitsDefaults,
+    pub syscall_profile: String,
+}
+
+fn default_network_deny() -> String {
+    "deny".to_string()
+}
+
+/// Capability definition for v2.0 policies
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Capability {
+    #[serde(rename = "type")]
+    pub cap_type: String,
+    pub profile: String,
+    #[serde(default)]
+    pub allowed_python_argv: Vec<String>,
+}
+
+/// Syscall profile for fine-grained syscall control
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SyscallProfile {
+    pub default: String,
+    #[serde(default)]
+    pub deny: Vec<String>,
+    #[serde(default)]
+    pub allow: Vec<String>,
+}
+
 /// Complete policy file structure
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Policy {
@@ -114,6 +193,15 @@ pub struct Policy {
     /// List of rules (evaluated in order)
     #[serde(default)]
     pub rules: Vec<Rule>,
+    /// v2.0: Sandbox profiles
+    #[serde(default)]
+    pub profiles: HashMap<String, SandboxProfile>,
+    /// v2.0: Capability definitions
+    #[serde(default)]
+    pub capabilities: HashMap<String, Capability>,
+    /// v2.0: Syscall profiles
+    #[serde(default)]
+    pub syscall_profiles: HashMap<String, SyscallProfile>,
 }
 
 fn default_version() -> String {
@@ -128,6 +216,9 @@ impl Default for Policy {
             default: DefaultAction::Deny,
             rate_limit: RateLimitConfig::default(),
             rules: Vec::new(),
+            profiles: HashMap::new(),
+            capabilities: HashMap::new(),
+            syscall_profiles: HashMap::new(),
         }
     }
 }
@@ -202,6 +293,14 @@ struct CompiledRule {
 pub struct PolicyEngine {
     policy: Policy,
     compiled_rules: Vec<CompiledRule>,
+    /// v2.0: Policy version string
+    pub version: String,
+    /// v2.0: Sandbox profiles
+    pub profiles: HashMap<String, SandboxProfile>,
+    /// v2.0: Capability definitions
+    pub capabilities: HashMap<String, Capability>,
+    /// v2.0: Syscall profiles
+    pub syscall_profiles: HashMap<String, SyscallProfile>,
 }
 
 impl PolicyEngine {
@@ -263,10 +362,25 @@ impl PolicyEngine {
             });
         }
 
+        // Extract v2.0 fields from policy
+        let version = policy.version.clone();
+        let profiles = policy.profiles.clone();
+        let capabilities = policy.capabilities.clone();
+        let syscall_profiles = policy.syscall_profiles.clone();
+
         Ok(PolicyEngine {
             policy,
             compiled_rules,
+            version,
+            profiles,
+            capabilities,
+            syscall_profiles,
         })
+    }
+
+    /// Load and compile a policy from a YAML string (v2.0 API)
+    pub fn from_yaml(yaml_content: &str) -> Result<Self, String> {
+        Self::load_from_string(yaml_content)
     }
 
     /// Get the policy mode
@@ -375,6 +489,16 @@ impl PolicyEngine {
             self.compiled_rules.len()
         )
     }
+
+    /// Get a sandbox profile by name (v2.0)
+    pub fn get_profile(&self, name: &str) -> Option<&SandboxProfile> {
+        self.profiles.get(name)
+    }
+
+    /// Get a capability by name (v2.0)
+    pub fn get_capability(&self, name: &str) -> Option<&Capability> {
+        self.capabilities.get(name)
+    }
 }
 
 #[cfg(test)]
@@ -475,5 +599,38 @@ rules:
         let cmd2 = ParsedCommand::parse("/usr/bin/ls -la");
         assert_eq!(cmd2.executable, "ls");
         assert_eq!(cmd2.args_string, "-la");
+    }
+
+    #[test]
+    fn test_parse_v2_policy_with_profile() {
+        let yaml = r#"
+version: "2.0"
+mode: enforce
+default: deny
+
+profiles:
+  python_sandbox_v1:
+    runner: "/usr/lib/sentra/python_runner"
+    python_bin: "/usr/bin/python3"
+    deny_spawn_processes: true
+    default_network: deny
+    fs_defaults:
+      cwd: "/work"
+      read_allow: ["/work"]
+      write_allow: ["/work/tmp", "/work/out"]
+    limits_defaults:
+      timeout_sec: 30
+      mem_max_mb: 512
+      pids_max: 64
+    syscall_profile: restricted
+
+capabilities:
+  exec_python:
+    type: python
+    profile: python_sandbox_v1
+"#;
+        let engine = PolicyEngine::from_yaml(yaml).unwrap();
+        assert!(engine.profiles.contains_key("python_sandbox_v1"));
+        assert!(engine.capabilities.contains_key("exec_python"));
     }
 }

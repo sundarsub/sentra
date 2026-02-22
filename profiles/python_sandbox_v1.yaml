@@ -1,0 +1,28 @@
+# Python Sandbox Profile v1 - Secure by Default
+runner: "/usr/lib/sentra/python_runner"
+python_bin: "/usr/bin/python3"
+deny_spawn_processes: true
+default_network: deny
+
+fs_defaults:
+  cwd: "/work"
+  read_allow:
+    - "/work"
+  write_allow:
+    - "/work/tmp"
+    - "/work/out"
+  protected_deny:
+    - "/"
+    - "/etc"
+    - "/proc"
+    - "/sys"
+
+limits_defaults:
+  timeout_sec: 30
+  cpu_max_percent: 50
+  mem_max_mb: 512
+  pids_max: 64
+  max_stdout_bytes: 200000
+  max_stderr_bytes: 200000
+
+syscall_profile: restricted
