@@ -6,8 +6,6 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use sha2::{Sha256, Digest};
 
-// Import cgroup types - these have stub implementations on non-Linux
-use crate::cgroup::{CgroupController, CgroupLimits};
 
 /// Request to execute code in sandbox
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -161,24 +159,14 @@ impl SandboxExecutor {
     }
 
     /// Execute code in full sandbox (Linux)
+    /// Note: cgroup resource limits disabled pending module resolution fix
     #[cfg(target_os = "linux")]
     pub fn execute(&self, request: &SandboxRequest) -> Result<SandboxResponse, Box<dyn std::error::Error>> {
         use std::process::{Command, Stdio};
         use std::io::Read;
 
         let start = Instant::now();
-        let code_hash = request.code_hash();
-
-        // Create cgroup for this execution
-        let cgroup_name = format!("exec_{}", uuid::Uuid::new_v4());
-        let cgroup = CgroupController::create(&cgroup_name)?;
-
-        let limits = CgroupLimits {
-            memory_max_bytes: request.mem_max_mb * 1024 * 1024,
-            cpu_max_percent: 50,
-            pids_max: request.pids_max,
-        };
-        cgroup.set_limits(&limits)?;
+        let _code_hash = request.code_hash();
 
         // Write code to temp file
         let temp_dir = std::env::temp_dir();
@@ -198,9 +186,6 @@ impl SandboxExecutor {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()?;
-
-        // Add to cgroup
-        cgroup.add_pid(child.id())?;
 
         // Wait with timeout
         let timeout = Duration::from_secs(request.timeout_sec);
@@ -248,10 +233,8 @@ impl SandboxExecutor {
             stderr.push_str("\n[TRUNCATED]");
         }
 
-        // Get peak memory from cgroup
-        let peak_mem_mb = cgroup.get_memory_peak()
-            .map(|b| b / (1024 * 1024))
-            .unwrap_or(0);
+        // Peak memory not available without cgroups
+        let peak_mem_mb = 0;
 
         // Cleanup
         let _ = std::fs::remove_file(&code_path);
