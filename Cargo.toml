@@ -1,6 +1,6 @@
 [package]
 name = "sentra"
-version = "0.1.1"
+version = "2.0.0"
 edition = "2021"
 description = "Sentra - Universal Execution Governance Gateway"
 authors = ["Sundar Subramaniam"]
@@ -9,6 +9,14 @@ repository = "https://github.com/sundarsubramaniam/sentra"
 keywords = ["security", "shell", "policy", "governance", "audit"]
 categories = ["command-line-utilities", "development-tools"]
 readme = "README.md"
+
+[[bin]]
+name = "sentra"
+path = "src/main.rs"
+
+[[bin]]
+name = "python_runner"
+path = "src/bin/python_runner.rs"
 
 [dependencies]
 # Serialization
@@ -35,6 +43,21 @@ colored = "2.1"
 
 # UUID for session tracking
 uuid = { version = "1.7", features = ["v4"] }
+
+# NEW: API mode
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "io-util", "time", "process", "sync", "macros"] }
+
+# NEW: Code hashing for audit
+sha2 = "0.10"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Sandbox infrastructure (Linux-only)
+nix = { version = "0.28", features = ["mount", "sched", "signal", "process", "user", "fs"] }
+caps = "0.5"
+libseccomp = "0.3"
+
+[dev-dependencies]
+tempfile = "3.10"
 
 [profile.release]
 opt-level = 3
