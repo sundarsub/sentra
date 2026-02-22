@@ -36,12 +36,14 @@ pub struct SandboxRequest {
 
 impl Default for SandboxRequest {
     fn default() -> Self {
+        // Use /tmp as default cwd for compatibility (works on Linux and macOS)
+        let default_cwd = std::env::temp_dir().to_string_lossy().to_string();
         Self {
             code: String::new(),
             profile: "python_sandbox_v1".to_string(),
-            cwd: "/work".to_string(),
-            fs_read_allow: vec!["/work".to_string()],
-            fs_write_allow: vec!["/work/tmp".to_string(), "/work/out".to_string()],
+            cwd: default_cwd.clone(),
+            fs_read_allow: vec![default_cwd.clone()],
+            fs_write_allow: vec![default_cwd],
             timeout_sec: 30,
             mem_max_mb: 512,
             pids_max: 64,
