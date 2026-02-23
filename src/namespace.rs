@@ -126,42 +126,77 @@ mod linux_impl {
 
     impl NamespaceBuilder {
         /// Apply all configured mounts
+        ///
+        /// Mount ordering is critical for correctness:
+        /// 1. First, apply all read-only mounts
+        /// 2. Then, apply all writable mounts
+        ///
+        /// This ensures that writable paths (like /tmp) remain writable
+        /// even if their parent (like /) was mounted read-only.
         pub fn apply_mounts(&self) -> Result<(), Box<dyn std::error::Error>> {
-            for m in &self.mounts {
-                // Ensure target directory/file exists
-                let source_path = Path::new(&m.source);
-                let target_path = Path::new(&m.target);
+            // Separate mounts into read-only and writable
+            let readonly_mounts: Vec<_> = self.mounts.iter().filter(|m| m.readonly).collect();
+            let writable_mounts: Vec<_> = self.mounts.iter().filter(|m| !m.readonly).collect();
 
-                if source_path.is_dir() {
-                    fs::create_dir_all(target_path)?;
-                } else {
-                    if let Some(parent) = target_path.parent() {
-                        fs::create_dir_all(parent)?;
-                    }
-                    if !target_path.exists() {
-                        fs::File::create(target_path)?;
-                    }
+            // Apply read-only mounts first
+            for m in &readonly_mounts {
+                self.apply_single_mount(m)?;
+            }
+
+            // Apply writable mounts last (so they override any parent read-only mounts)
+            for m in &writable_mounts {
+                self.apply_single_mount(m)?;
+            }
+
+            Ok(())
+        }
+
+        /// Apply a single mount
+        fn apply_single_mount(&self, m: &MountConfig) -> Result<(), Box<dyn std::error::Error>> {
+            let source_path = Path::new(&m.source);
+            let target_path = Path::new(&m.target);
+
+            // Ensure target directory/file exists
+            if source_path.is_dir() {
+                fs::create_dir_all(target_path)?;
+            } else {
+                if let Some(parent) = target_path.parent() {
+                    fs::create_dir_all(parent)?;
                 }
+                if !target_path.exists() {
+                    fs::File::create(target_path)?;
+                }
+            }
 
-                // Bind mount
+            // Bind mount
+            mount(
+                Some(m.source.as_str()),
+                m.target.as_str(),
+                None::<&str>,
+                MsFlags::MS_BIND,
+                None::<&str>,
+            )?;
+
+            // Remount with appropriate permissions
+            if m.readonly {
+                // Remount as readonly
                 mount(
-                    Some(m.source.as_str()),
+                    None::<&str>,
                     m.target.as_str(),
                     None::<&str>,
-                    MsFlags::MS_BIND,
+                    MsFlags::MS_BIND | MsFlags::MS_REMOUNT | MsFlags::MS_RDONLY,
                     None::<&str>,
                 )?;
-
-                // Remount as readonly if requested
-                if m.readonly {
-                    mount(
-                        None::<&str>,
-                        m.target.as_str(),
-                        None::<&str>,
-                        MsFlags::MS_BIND | MsFlags::MS_REMOUNT | MsFlags::MS_RDONLY,
-                        None::<&str>,
-                    )?;
-                }
+            } else {
+                // Explicitly remount as read-write
+                // This is critical when the mount point is under a read-only parent
+                mount(
+                    None::<&str>,
+                    m.target.as_str(),
+                    None::<&str>,
+                    MsFlags::MS_BIND | MsFlags::MS_REMOUNT,
+                    None::<&str>,
+                )?;
             }
 
             Ok(())
