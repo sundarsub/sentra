@@ -1241,6 +1241,127 @@ Even if the AI agent is fully compromised:
 - All code execution goes through Sentra's policy engine
 - Code runs in a separate, isolated sandbox
 
+## Sentra OR Gate - Budget-Based LLM Routing
+
+Sentra OR Gate is a Python proxy that routes LLM requests to OpenRouter with automatic model selection based on budget. As budget depletes, it automatically degrades from premium to cheaper models.
+
+### Architecture
+
+```
+┌──────────┐     ┌──────────────┐     ┌────────────┐
+│ OpenClaw │────▶│ Sentra OR    │────▶│ OpenRouter │
+│ (Agent)  │     │ Gate :8080   │     │            │
+└──────────┘     └──────────────┘     └────────────┘
+                        │
+                 ┌──────┴──────┐
+                 │ policy.yaml │
+                 │ (cost_routing)│
+                 └─────────────┘
+```
+
+### Tier-Based Model Selection
+
+| Budget Remaining | Models Used |
+|------------------|-------------|
+| > 80% | claude-3.5-sonnet, gpt-4o (Premium) |
+| 30-80% | claude-3-haiku, gpt-4o-mini (Mid-tier) |
+| < 30% | mistral-7b-instruct (Economy) |
+| 0% (hard_cap=true) | 402 error - budget exhausted |
+
+### Quick Start
+
+```bash
+# Install dependencies
+pip install -r sentra-or-gate/requirements.txt
+
+# Set OpenRouter API key
+export OPENROUTER_API_KEY="sk-or-v1-..."
+
+# Run the gate
+python -m sentra-or-gate.main
+
+# Test
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "X-Agent-ID: agent-1" \
+  -d '{"messages": [{"role": "user", "content": "Hello"}]}'
+```
+
+### Configuration
+
+Add the `cost_routing` section to `policy.yaml`:
+
+```yaml
+cost_routing:
+  openrouter:
+    base_url: "https://openrouter.ai/api/v1"
+    api_key: "${OPENROUTER_API_KEY}"
+    timeout_seconds: 120
+
+  spend_log: "./spend.jsonl"
+
+  agents:
+    agent-1:
+      budget_total: 50.00
+      budget_spent: 0.00
+      hard_cap: true
+      tiers:
+        - threshold: 0.80
+          models: ["anthropic/claude-3.5-sonnet", "openai/gpt-4o"]
+        - threshold: 0.30
+          models: ["anthropic/claude-3-haiku", "openai/gpt-4o-mini"]
+        - threshold: 0.00
+          models: ["mistralai/mistral-7b-instruct"]
+```
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/v1/chat/completions` | POST | OpenAI-compatible chat proxy |
+| `/api/health` | GET | Health check |
+| `/api/spend/{agent_id}` | GET | Get spend for agent |
+| `/api/budget/{agent_id}` | POST | Update budget (JetPatch console) |
+| `/api/reset/{agent_id}` | POST | Reset spend for agent |
+
+### Integration with Seccomp-Locked OpenClaw
+
+When running with `openclaw_launcher`, OpenClaw can reach both Sentra (for code execution) and OR Gate (for LLM requests) on loopback:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    LOOPBACK (127.0.0.1)                     │
+│                                                             │
+│  ┌──────────┐                                               │
+│  │ OpenClaw │──┬──▶ Sentra      :9999  (code execution)     │
+│  │ (locked) │  │                                            │
+│  └──────────┘  └──▶ OR Gate     :8080  (LLM requests)       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+OpenClaw points its LLM client at `http://127.0.0.1:8080/v1/chat/completions` instead of OpenRouter directly.
+
+### Testing with Mock Server
+
+For testing without real API calls:
+
+```bash
+# Terminal 1: Start mock OpenRouter
+python -m sentra-or-gate.mock_openrouter
+
+# Terminal 2: Update policy.yaml base_url to http://localhost:9000/v1
+OPENROUTER_API_KEY="test" python -m sentra-or-gate.main
+
+# Terminal 3: Send test requests
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "X-Agent-ID: agent-1" \
+  -d '{"messages": [{"role": "user", "content": "Hello"}]}'
+```
+
+See [sentra-or-gate/README.md](sentra-or-gate/README.md) for full documentation.
+
 ## License
 
 Apache-2.0
