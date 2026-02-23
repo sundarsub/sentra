@@ -16,6 +16,63 @@ rate_limit:
   window_seconds: 60 # Sliding window duration in seconds
 
 # =============================================================================
+# v2.1 COST ROUTING (OpenRouter Adapter)
+# Budget-based model selection for LLM requests
+# =============================================================================
+
+cost_routing:
+  # JetPatch console integration (future)
+  console:
+    enabled: false                              # Toggle local-only vs console-managed
+    url: "https://console.jetpatch.com"         # Console API endpoint
+    sync_interval_seconds: 30                   # Push spend / pull budget interval
+    api_key: "${JETPATCH_API_KEY}"              # From environment variable
+
+  # Spend tracking (append-only log for recovery)
+  spend_log: "./spend.jsonl"
+
+  # OpenRouter settings
+  openrouter:
+    base_url: "https://openrouter.ai/api/v1"    # Production OpenRouter API
+    api_key: "${OPENROUTER_API_KEY}"
+    timeout_seconds: 120
+
+  # Agent configurations
+  agents:
+    # Premium agent with tiered model degradation
+    agent-1:
+      budget_total: 50.00
+      budget_spent: 0.00
+      budget_source: local                      # local | console
+      period: daily                             # daily | weekly | monthly | none
+      period_reset: "2025-02-23T00:00:00Z"      # When current period started
+      hard_cap: true                            # Block requests when exhausted
+      tiers:
+        - threshold: 0.80                       # >80% remaining -> premium
+          models:
+            - "anthropic/claude-3.5-sonnet"
+            - "openai/gpt-4o"
+        - threshold: 0.30                       # 30-80% remaining -> mid-tier
+          models:
+            - "anthropic/claude-3-haiku"
+            - "openai/gpt-4o-mini"
+        - threshold: 0.00                       # <30% remaining -> economy
+          models:
+            - "mistralai/mistral-7b-instruct"
+
+    # Default fallback agent (economy only, no hard cap)
+    default:
+      budget_total: 10.00
+      budget_spent: 0.00
+      budget_source: local
+      period: none
+      hard_cap: false
+      tiers:
+        - threshold: 0.00
+          models:
+            - "mistralai/mistral-7b-instruct"
+
+# =============================================================================
 # v2.0 SANDBOX PROFILES
 # Defines named execution profiles for sandboxed code execution
 # =============================================================================

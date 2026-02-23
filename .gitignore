@@ -1,8 +1,16 @@
 # Build artifacts
 /target/
 
-# Audit logs
+# Audit logs and runtime data
 *.jsonl
+openrouter_requests.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+*.egg
 
 # OS files
 .DS_Store
@@ -17,9 +25,6 @@
 
 # Distribution
 /dist/
-
-# Local docs
-/docs/
 
 # Local policy variations
 /policies/
