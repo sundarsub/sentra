@@ -185,25 +185,13 @@ fn apply_openclaw_seccomp(sentra_port: u16, verbose: bool) -> Result<(), Box<dyn
     let mut filter = ScmpFilterContext::new_filter(ScmpAction::Allow)?;
 
     // ═══════════════════════════════════════════════════════════
-    // BLOCK: Process spawning (no subprocess, no code execution)
-    // ═══════════════════════════════════════════════════════════
-    let process_spawn_syscalls = [
-        "execve",
-        "execveat",
-    ];
-
-    for syscall_name in &process_spawn_syscalls {
-        if let Ok(syscall) = ScmpSyscall::from_name(syscall_name) {
-            filter.add_rule(ScmpAction::Errno(libc::EPERM), syscall)?;
-            if verbose {
-                println!("  → Blocking syscall: {}", syscall_name);
-            }
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════
     // BLOCK: Fork/clone for new processes
     // Note: We allow clone() with CLONE_THREAD for threading
+    //
+    // IMPORTANT: We do NOT block execve/execveat here because:
+    // 1. We need to exec OpenClaw AFTER applying seccomp
+    // 2. Without fork, execve can only replace the current process
+    // 3. subprocess.run() needs fork+exec, so blocking fork is enough
     // ═══════════════════════════════════════════════════════════
     let fork_syscalls = [
         "fork",
@@ -219,13 +207,42 @@ fn apply_openclaw_seccomp(sentra_port: u16, verbose: bool) -> Result<(), Box<dyn
         }
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // ALLOW: clone() only with CLONE_THREAD (for threads, not processes)
-    // This allows Python/Node.js threading while blocking fork()
-    // ═══════════════════════════════════════════════════════════
-    // Note: This is complex to implement with libseccomp argument matching.
-    // For simplicity, we allow clone() but block fork/vfork.
-    // OpenClaw using Python can still use threading.
+    // Block clone() when used for new processes (not threads)
+    // clone() with CLONE_THREAD (0x10000) flag is allowed for threading
+    // clone() without CLONE_THREAD is blocked (process creation)
+    if let Ok(clone_syscall) = ScmpSyscall::from_name("clone") {
+        // Block clone without CLONE_THREAD flag (arg0 & 0x10000 == 0)
+        // This allows threading but blocks process creation
+        filter.add_rule_conditional(
+            ScmpAction::Errno(libc::EPERM),
+            clone_syscall,
+            &[ScmpArgCompare::new(0, ScmpCompareOp::MaskedEqual(0x10000), 0)],
+        )?;
+        if verbose {
+            println!("  → Blocking syscall: clone (without CLONE_THREAD)");
+        }
+    }
+
+    // Block clone3() for process creation (modern clone)
+    if let Ok(clone3_syscall) = ScmpSyscall::from_name("clone3") {
+        filter.add_rule(ScmpAction::Errno(libc::EPERM), clone3_syscall)?;
+        if verbose {
+            println!("  → Blocking syscall: clone3");
+        }
+    }
+
+    // Block execveat (alternative exec path) - execve is allowed for initial launch
+    if let Ok(execveat) = ScmpSyscall::from_name("execveat") {
+        filter.add_rule(ScmpAction::Errno(libc::EPERM), execveat)?;
+        if verbose {
+            println!("  → Blocking syscall: execveat");
+        }
+    }
+
+    // NOTE: execve is intentionally ALLOWED because:
+    // 1. We need it to launch OpenClaw
+    // 2. Without fork/vfork/clone(for processes), execve only replaces self
+    // 3. subprocess.run() etc need fork+exec, so blocking fork is sufficient
 
     // ═══════════════════════════════════════════════════════════
     // BLOCK: Dangerous kernel/system syscalls
