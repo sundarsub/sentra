@@ -103,6 +103,11 @@ mod linux_impl {
 
     impl NamespaceConfig {
         /// Enter new namespaces. Call this in child process after fork.
+        ///
+        /// IMPORTANT: After creating a new mount namespace, we make all mounts
+        /// "private" to prevent mount events from propagating back to the parent
+        /// namespace. Without this, bind mounts created in the sandbox would leak
+        /// into the parent namespace and accumulate over time.
         pub fn unshare(&self) -> Result<(), Box<dyn std::error::Error>> {
             let mut flags = CloneFlags::empty();
 
@@ -120,6 +125,23 @@ mod linux_impl {
             }
 
             unshare(flags)?;
+
+            // CRITICAL: Make all mounts private to prevent mount propagation
+            // back to the parent namespace. Without this, bind mounts leak!
+            //
+            // By default, mounts are "shared" which means mount/unmount events
+            // propagate between namespaces. We need to make them "private" so
+            // that mounts in this namespace don't affect the parent.
+            if self.new_mount_ns {
+                mount(
+                    None::<&str>,
+                    "/",
+                    None::<&str>,
+                    MsFlags::MS_REC | MsFlags::MS_PRIVATE,
+                    None::<&str>,
+                )?;
+            }
+
             Ok(())
         }
     }
