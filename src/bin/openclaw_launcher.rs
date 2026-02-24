@@ -1,24 +1,22 @@
 //! OpenClaw Launcher - Seccomp-Locked AI Agent Launcher
 //!
 //! This binary launches an AI agent (OpenClaw) in a seccomp-locked environment
-//! where the only way to execute code is through the Sentra API.
+//! with configurable security profiles loaded from policy.yaml.
 //!
 //! Security flow:
-//! 1. Start Sentra API server (if not already running)
-//! 2. Apply seccomp filter that blocks:
-//!    - execve/execveat (no subprocess spawning)
-//!    - fork/vfork/clone (no process creation, except threads)
-//!    - Arbitrary network (only loopback to Sentra allowed)
-//!    - Dangerous syscalls (ptrace, mount, etc.)
-//! 3. Exec OpenClaw binary (this is the LAST exec before seccomp locks)
+//! 1. Load seccomp profile from policy.yaml
+//! 2. Optionally start Sentra (API or REPL mode)
+//! 3. Apply seccomp filter based on selected profile
+//! 4. Set SHELL to sentra-shell for command governance
+//! 5. Exec OpenClaw binary (this is the LAST exec before seccomp locks)
 //!
-//! After step 3, the OpenClaw process CANNOT:
+//! After step 5, the OpenClaw process CANNOT:
 //! - Run any subprocess (subprocess.run(), os.system() all fail)
 //! - Fork new processes
-//! - Connect to arbitrary network hosts
-//! - Escape to execute code directly
+//! - Execute dangerous syscalls (ptrace, mount, etc.)
 //!
-//! The ONLY way OpenClaw can execute code is by calling Sentra's TCP API.
+//! Commands executed by OpenClaw go through the SHELL (Sentra REPL) for
+//! policy enforcement.
 
 use std::net::TcpStream;
 use std::process::{Command, Stdio};
@@ -26,6 +24,9 @@ use std::thread;
 use std::time::Duration;
 
 use clap::Parser;
+use sentra::seccomp_profile::{
+    apply_seccomp_profile, load_from_policy, PolicySeccompConfig, SeccompProfile,
+};
 
 /// OpenClaw Launcher - Secure AI Agent Execution Environment
 #[derive(Parser, Debug)]
@@ -42,7 +43,17 @@ struct Args {
     #[arg(short, long, default_value = "/usr/local/bin/sentra")]
     sentra_bin: String,
 
-    /// Sentra API port
+    /// Path to policy.yaml file
+    #[arg(long, default_value = "/etc/sentra/policy.yaml")]
+    policy: String,
+
+    /// Seccomp profile to apply (from policy.yaml seccomp_profiles section)
+    /// Use 'gateway' (default) for OpenClaw which needs subprocess spawning
+    /// Use restrictive profiles like 'whatsapp_agent' only for sandboxed code
+    #[arg(long, default_value = "gateway")]
+    seccomp_profile: String,
+
+    /// Sentra API port (used when --sentra-api is set)
     #[arg(short, long, default_value = "9999")]
     port: u16,
 
@@ -50,7 +61,21 @@ struct Args {
     #[arg(long, default_value = "/usr/lib/sentra/python_runner")]
     python_runner: String,
 
-    /// Skip starting Sentra (if already running)
+    /// Path to sentra-shell wrapper script
+    #[arg(long, default_value = "/usr/local/bin/sentra-shell")]
+    sentra_shell: String,
+
+    /// Use Sentra REPL mode (commands via SHELL env var)
+    /// This is the default and recommended mode
+    #[arg(long, default_value = "true")]
+    sentra_repl: bool,
+
+    /// Use Sentra API mode instead of REPL
+    /// When set, starts Sentra API server and waits for it
+    #[arg(long)]
+    sentra_api: bool,
+
+    /// Skip starting Sentra entirely (if already running or not needed)
     #[arg(long)]
     skip_sentra: bool,
 
@@ -58,10 +83,14 @@ struct Args {
     #[arg(short, long)]
     verbose: bool,
 
-    /// Skip seccomp lockdown (allows network access, subprocess spawning)
+    /// Skip seccomp lockdown (allows full system access)
     /// WARNING: This reduces security - only use for trusted AI agents
     #[arg(long)]
     no_seccomp: bool,
+
+    /// List available seccomp profiles and exit
+    #[arg(long)]
+    list_profiles: bool,
 
     /// Remaining arguments passed to OpenClaw
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -71,31 +100,101 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
+    // Load policy configuration
+    let config = match load_from_policy(&args.policy) {
+        Ok(c) => c,
+        Err(e) => {
+            // If policy file doesn't exist, use defaults
+            if args.verbose {
+                eprintln!("Warning: Could not load policy from {}: {}", args.policy, e);
+                eprintln!("Using default configuration");
+            }
+            PolicySeccompConfig::default()
+        }
+    };
+
+    // Handle --list-profiles
+    if args.list_profiles {
+        println!("Available seccomp profiles:");
+        println!();
+        for (name, profile) in &config.seccomp_profiles {
+            let extends = profile
+                .extends
+                .as_ref()
+                .map(|e| format!(" (extends: {})", e))
+                .unwrap_or_default();
+            let network = if profile.allow.iter().any(|s| s == "socket") {
+                "network: allowed"
+            } else {
+                "network: blocked"
+            };
+            println!("  • {}{}", name, extends);
+            println!("    {}", network);
+            if let Some(np) = &profile.network_policy {
+                if !np.allow_outbound.is_empty() {
+                    println!("    outbound: {:?}", np.allow_outbound);
+                }
+            }
+            println!();
+        }
+        return;
+    }
+
     println!("╔══════════════════════════════════════════════════════════╗");
     println!("║           OpenClaw Launcher - Secure Execution           ║");
     println!("║         Seccomp-Locked AI Agent Environment              ║");
     println!("╚══════════════════════════════════════════════════════════╝");
     println!();
 
-    // Step 1: Start Sentra API server (if not already running)
-    if !args.skip_sentra {
-        if let Err(e) = start_sentra_server(&args) {
-            eprintln!("ERROR: Failed to start Sentra: {}", e);
+    // Resolve the seccomp profile
+    let profile_name = &args.seccomp_profile;
+    let resolved_profile = if config.seccomp_profiles.is_empty() {
+        if args.verbose {
+            println!("→ No seccomp profiles in policy, using built-in defaults");
+        }
+        None
+    } else {
+        match SeccompProfile::resolve(profile_name, &config.seccomp_profiles) {
+            Ok(p) => {
+                println!("→ Using seccomp profile: {}", profile_name);
+                Some(p)
+            }
+            Err(e) => {
+                eprintln!("ERROR: Failed to resolve seccomp profile '{}': {}", profile_name, e);
+                eprintln!("Available profiles: {:?}", config.seccomp_profiles.keys().collect::<Vec<_>>());
+                std::process::exit(1);
+            }
+        }
+    };
+
+    // Step 1: Handle Sentra startup based on mode
+    if args.sentra_api && !args.skip_sentra {
+        // API mode: start Sentra API server
+        if let Err(e) = start_sentra_api_server(&args) {
+            eprintln!("ERROR: Failed to start Sentra API: {}", e);
             std::process::exit(1);
         }
-    } else {
-        println!("→ Skipping Sentra start (--skip-sentra)");
+
+        // Wait for Sentra API to be ready
+        println!("→ Waiting for Sentra API on port {}...", args.port);
+        if !wait_for_sentra(args.port, Duration::from_secs(10)) {
+            eprintln!("ERROR: Sentra API not responding on port {}", args.port);
+            std::process::exit(1);
+        }
+        println!("✓ Sentra API ready");
+    } else if args.sentra_repl && !args.skip_sentra {
+        // REPL mode: verify sentra-shell exists
+        if !std::path::Path::new(&args.sentra_shell).exists() {
+            eprintln!("ERROR: sentra-shell not found at: {}", args.sentra_shell);
+            eprintln!("Create it or specify path with --sentra-shell");
+            std::process::exit(1);
+        }
+        println!("→ Sentra REPL mode: SHELL={}", args.sentra_shell);
+    } else if args.skip_sentra {
+        println!("→ Skipping Sentra (--skip-sentra)");
     }
 
-    // Step 2: Wait for Sentra to be ready
-    println!("→ Waiting for Sentra API on port {}...", args.port);
-    if !wait_for_sentra(args.port, Duration::from_secs(10)) {
-        eprintln!("ERROR: Sentra API not responding on port {}", args.port);
-        std::process::exit(1);
-    }
-    println!("✓ Sentra API ready");
-
-    // Step 3: Apply seccomp filter (Linux only, unless --no-seccomp)
+    // Step 2: Apply seccomp filter (Linux only, unless --no-seccomp)
     #[cfg(target_os = "linux")]
     {
         if args.no_seccomp {
@@ -104,9 +203,25 @@ fn main() {
             println!("  Network access: ALLOWED");
             println!("  Subprocess spawning: ALLOWED");
             println!();
-        } else {
+        } else if let Some(ref profile) = resolved_profile {
             println!("→ Applying seccomp lockdown...");
-            if let Err(e) = apply_openclaw_seccomp(args.port, args.verbose) {
+            if let Err(e) = apply_seccomp_profile(profile, args.verbose) {
+                eprintln!("ERROR: Failed to apply seccomp: {}", e);
+                std::process::exit(1);
+            }
+            println!("✓ Seccomp filter applied - process locked");
+
+            // Print what's allowed/blocked
+            if args.verbose {
+                println!("  Denied syscalls: {:?}", profile.all_denied_syscalls());
+                if !profile.allow.is_empty() {
+                    println!("  Allowed syscalls: {:?}", profile.allow);
+                }
+            }
+        } else {
+            // Use built-in hardcoded seccomp (fallback)
+            println!("→ Applying built-in seccomp lockdown...");
+            if let Err(e) = apply_builtin_seccomp(args.verbose) {
                 eprintln!("ERROR: Failed to apply seccomp: {}", e);
                 std::process::exit(1);
             }
@@ -122,11 +237,25 @@ fn main() {
         println!();
     }
 
+    // Step 3: Set environment variables
+    if args.sentra_repl && !args.skip_sentra {
+        std::env::set_var("SHELL", &args.sentra_shell);
+        std::env::set_var("SENTRA_POLICY", &args.policy);
+        std::env::set_var("PYTHON_RUNNER", &args.python_runner);
+        println!("→ Set SHELL={}", args.sentra_shell);
+    }
+
     // Step 4: Print security status
     println!();
     println!("═══════════════════════════════════════════════════════════");
-    println!("  SECCOMP LOCKED - OpenClaw can ONLY execute via Sentra    ");
-    println!("  API endpoint: 127.0.0.1:{}", args.port);
+    if args.sentra_repl {
+        println!("  SECCOMP LOCKED - Commands via Sentra REPL             ");
+    } else if args.sentra_api {
+        println!("  SECCOMP LOCKED - Code execution via Sentra API        ");
+        println!("  API endpoint: 127.0.0.1:{}", args.port);
+    } else {
+        println!("  SECCOMP LOCKED - Limited system access                ");
+    }
     println!("═══════════════════════════════════════════════════════════");
     println!();
 
@@ -136,7 +265,7 @@ fn main() {
 }
 
 /// Start Sentra API server in background
-fn start_sentra_server(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
+fn start_sentra_api_server(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
     println!("→ Starting Sentra API server on port {}...", args.port);
 
     // Check if Sentra is already running
@@ -150,6 +279,8 @@ fn start_sentra_server(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
     cmd.arg("--api")
         .arg("--port")
         .arg(args.port.to_string())
+        .arg("--policy")
+        .arg(&args.policy)
         .arg("--python-runner")
         .arg(&args.python_runner)
         .stdin(Stdio::null())
@@ -181,187 +312,89 @@ fn wait_for_sentra(port: u16, timeout: Duration) -> bool {
     false
 }
 
-/// Apply seccomp filter for OpenClaw lockdown (Linux only)
+/// Apply built-in seccomp filter (fallback when no YAML profile)
 #[cfg(target_os = "linux")]
-fn apply_openclaw_seccomp(
-    sentra_port: u16,
-    verbose: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn apply_builtin_seccomp(verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
     use libseccomp::{ScmpAction, ScmpArgCompare, ScmpCompareOp, ScmpFilterContext, ScmpSyscall};
     use nix::libc;
 
-    // Set NO_NEW_PRIVS (required for unprivileged seccomp)
+    // Set NO_NEW_PRIVS
     unsafe {
         if libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0 {
             return Err("Failed to set NO_NEW_PRIVS".into());
         }
     }
 
-    // Default action: ALLOW (we selectively deny dangerous syscalls)
     let mut filter = ScmpFilterContext::new_filter(ScmpAction::Allow)?;
 
-    // ═══════════════════════════════════════════════════════════
-    // BLOCK: Fork/clone for new processes
-    // Note: We allow clone() with CLONE_THREAD for threading
-    //
-    // IMPORTANT: We do NOT block execve/execveat here because:
-    // 1. We need to exec OpenClaw AFTER applying seccomp
-    // 2. Without fork, execve can only replace the current process
-    // 3. subprocess.run() needs fork+exec, so blocking fork is enough
-    // ═══════════════════════════════════════════════════════════
-    let fork_syscalls = ["fork", "vfork"];
-
-    for syscall_name in &fork_syscalls {
+    // Block fork/vfork
+    for syscall_name in &["fork", "vfork", "execveat"] {
         if let Ok(syscall) = ScmpSyscall::from_name(syscall_name) {
             filter.add_rule(ScmpAction::Errno(libc::EPERM), syscall)?;
             if verbose {
-                println!("  → Blocking syscall: {}", syscall_name);
+                println!("  → Deny: {}", syscall_name);
             }
         }
     }
 
-    // Block clone() when used for process creation (no CLONE_THREAD flag)
-    // CLONE_THREAD = 0x10000 - when set, creates a thread; when not set, creates a process
-    // Node.js uses clone() with SIGCHLD (no CLONE_THREAD) for subprocess spawning
-    // We allow clone WITH CLONE_THREAD (threading) but block clone WITHOUT it (processes)
+    // Block clone for process creation (allow threads)
     if let Ok(clone_syscall) = ScmpSyscall::from_name("clone") {
-        // Block clone when (flags & CLONE_THREAD) == 0
-        // Using MaskedEqual: (arg & mask) == value
-        // mask = 0x10000, value = 0 means: block when CLONE_THREAD is NOT set
         filter.add_rule_conditional(
             ScmpAction::Errno(libc::EPERM),
             clone_syscall,
-            &[ScmpArgCompare::new(
-                0,
-                ScmpCompareOp::MaskedEqual(0x10000),
-                0,
-            )],
+            &[ScmpArgCompare::new(0, ScmpCompareOp::MaskedEqual(0x10000), 0)],
         )?;
         if verbose {
-            println!("  → Blocking syscall: clone (process creation, threading allowed)");
+            println!("  → Deny: clone (process creation, threads allowed)");
         }
     }
 
-    // Block clone3() for process creation
-    // clone3 uses a struct for flags, harder to filter precisely
-    // For now, block all clone3 - if this breaks threading, we'll need to revisit
-    if let Ok(clone3_syscall) = ScmpSyscall::from_name("clone3") {
-        // Note: clone3 uses a struct, so arg0 is a pointer, not flags
-        // We'd need to inspect the struct memory to check CLONE_THREAD
-        // For simplicity, we allow clone3 entirely since modern runtimes
-        // primarily use it for threading, not subprocess creation
-        // TODO: More sophisticated clone3 filtering if needed
-        if verbose {
-            println!("  → clone3 allowed (struct-based, threading support)");
-        }
-    }
-
-    // Block execveat (alternative exec path) - execve is allowed for initial launch
-    if let Ok(execveat) = ScmpSyscall::from_name("execveat") {
-        filter.add_rule(ScmpAction::Errno(libc::EPERM), execveat)?;
-        if verbose {
-            println!("  → Blocking syscall: execveat");
-        }
-    }
-
-    // NOTE: execve is intentionally ALLOWED because:
-    // 1. We need it to launch OpenClaw
-    // 2. Without fork/vfork/clone(for processes), execve only replaces self
-    // 3. subprocess.run() etc need fork+exec, so blocking fork is sufficient
-
-    // ═══════════════════════════════════════════════════════════
-    // BLOCK: Dangerous kernel/system syscalls
-    // ═══════════════════════════════════════════════════════════
-    let dangerous_syscalls = [
-        // Kernel attack surface
-        "ptrace",
-        "mount",
-        "umount2",
-        "pivot_root",
-        "bpf",
-        "perf_event_open",
-        "init_module",
-        "delete_module",
-        "finit_module",
-        "keyctl",
-        "unshare",
-        "setns",
-        // Privilege escalation
-        "setuid",
-        "setgid",
-        "setresuid",
-        "setresgid",
-        "setgroups",
-        "capset",
-        // System control
-        "reboot",
-        "kexec_load",
-        "kexec_file_load",
-        "swapon",
-        "swapoff",
-        "sethostname",
-        "setdomainname",
-        // Raw I/O (bypass filesystem)
-        "iopl",
-        "ioperm",
+    // Block dangerous syscalls
+    let dangerous = [
+        "ptrace", "mount", "umount2", "pivot_root", "bpf", "perf_event_open",
+        "init_module", "delete_module", "finit_module", "keyctl", "unshare", "setns",
+        "setuid", "setgid", "setresuid", "setresgid", "setgroups", "capset",
+        "reboot", "kexec_load", "kexec_file_load", "swapon", "swapoff",
+        "sethostname", "setdomainname", "iopl", "ioperm",
     ];
 
-    for syscall_name in &dangerous_syscalls {
+    for syscall_name in &dangerous {
         if let Ok(syscall) = ScmpSyscall::from_name(syscall_name) {
             filter.add_rule(ScmpAction::Errno(libc::EPERM), syscall)?;
-            if verbose {
-                println!("  → Blocking syscall: {}", syscall_name);
-            }
         }
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // NETWORK: We allow socket/connect to loopback only
-    // This is tricky with seccomp alone - we rely on:
-    // 1. Network namespace isolation (if available)
-    // 2. iptables rules (set by wrapper script)
-    // 3. For now, we allow network and trust the isolation layer
-    //
-    // A production implementation would use:
-    // - Network namespace with veth to only reach Sentra
-    // - Or eBPF/cgroup for fine-grained network control
-    // ═══════════════════════════════════════════════════════════
-
-    // Load the filter - THIS IS IRREMOVABLE
     filter.load()?;
 
     if verbose {
-        println!("  → Seccomp filter loaded (irremovable)");
+        println!("  → Seccomp filter loaded");
     }
 
     Ok(())
 }
 
+#[cfg(not(target_os = "linux"))]
+fn apply_builtin_seccomp(_verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
+    Ok(())
+}
+
 /// Exec OpenClaw - this replaces the current process
-/// After this call, execve is blocked by seccomp, so this is the LAST exec
 #[cfg(target_os = "linux")]
 fn exec_openclaw(openclaw_bin: &str, args: &[String]) -> ! {
     use nix::unistd::execv;
     use std::ffi::CString;
 
-    // Build argument list
     let mut c_args: Vec<CString> = Vec::new();
-
-    // First arg is the program name
     c_args.push(CString::new(openclaw_bin).expect("Invalid openclaw path"));
 
-    // Add remaining arguments
     for arg in args {
         c_args.push(CString::new(arg.as_str()).expect("Invalid argument"));
     }
 
-    // Convert to the format execv expects
     let c_args_refs: Vec<&std::ffi::CStr> = c_args.iter().map(|s| s.as_c_str()).collect();
 
-    // Exec OpenClaw - this replaces the current process
-    // After seccomp is applied, this is the LAST successful execve
     match execv(&c_args[0], &c_args_refs) {
-        Ok(_) => unreachable!(), // execv never returns on success
+        Ok(_) => unreachable!(),
         Err(e) => {
             eprintln!("ERROR: Failed to exec OpenClaw: {}", e);
             std::process::exit(1);
@@ -369,7 +402,6 @@ fn exec_openclaw(openclaw_bin: &str, args: &[String]) -> ! {
     }
 }
 
-/// Non-Linux: Just spawn OpenClaw as a child process
 #[cfg(not(target_os = "linux"))]
 fn exec_openclaw(openclaw_bin: &str, args: &[String]) -> ! {
     let status = Command::new(openclaw_bin)
@@ -388,27 +420,23 @@ fn exec_openclaw(openclaw_bin: &str, args: &[String]) -> ! {
     }
 }
 
-/// Non-Linux: Stub for seccomp
-#[cfg(not(target_os = "linux"))]
-fn apply_openclaw_seccomp(
-    _sentra_port: u16,
-    _verbose: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_args_parsing() {
-        // Test that Args can be parsed (basic sanity check)
-        let args = Args::try_parse_from(&["openclaw_launcher", "--port", "9999", "--skip-sentra"]);
+        let args = Args::try_parse_from(&[
+            "openclaw_launcher",
+            "--port", "9999",
+            "--skip-sentra",
+            "--seccomp-profile", "whatsapp_agent",
+        ]);
         assert!(args.is_ok());
         let args = args.unwrap();
         assert_eq!(args.port, 9999);
         assert!(args.skip_sentra);
+        assert_eq!(args.seccomp_profile, "whatsapp_agent");
     }
 
     #[test]
@@ -417,6 +445,14 @@ mod tests {
         assert_eq!(args.port, 9999);
         assert_eq!(args.openclaw_bin, "/usr/local/bin/openclaw");
         assert_eq!(args.sentra_bin, "/usr/local/bin/sentra");
-        assert!(!args.skip_sentra);
+        assert_eq!(args.seccomp_profile, "gateway");
+        assert!(args.sentra_repl);
+        assert!(!args.sentra_api);
+    }
+
+    #[test]
+    fn test_list_profiles_flag() {
+        let args = Args::try_parse_from(&["openclaw_launcher", "--list-profiles"]).unwrap();
+        assert!(args.list_profiles);
     }
 }

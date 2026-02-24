@@ -5,6 +5,7 @@ pub mod policy;
 pub mod rate_limit;
 pub mod sandbox;
 pub mod seccomp;
+pub mod seccomp_profile;
 
 // API module (to be implemented in later tasks)
 // pub mod api;

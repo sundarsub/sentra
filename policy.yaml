@@ -73,6 +73,215 @@ cost_routing:
             - "mistralai/mistral-7b-instruct"
 
 # =============================================================================
+# v2.2 SECCOMP PROFILES
+# Configurable syscall filtering for different execution contexts
+# Used by openclaw_launcher to apply security restrictions before exec
+# =============================================================================
+
+seccomp_profiles:
+  # Gateway profile - permissive for OpenClaw gateway process
+  # Allows spawn since OpenClaw needs to create subprocesses internally
+  gateway:
+    default: allow
+
+    # Only block truly dangerous syscalls that should never be needed
+    deny_dangerous:
+      - ptrace
+      - mount
+      - umount2
+      - pivot_root
+      - bpf
+      - init_module
+      - delete_module
+      - finit_module
+      - kexec_load
+      - kexec_file_load
+      - reboot
+
+  # Base profile - blocks dangerous syscalls, allows threads
+  # Used for sandboxed code execution (NOT for gateway)
+  base_restricted:
+    default: allow
+
+    # Process creation - BLOCKED (except threads)
+    deny:
+      - fork
+      - vfork
+      - execveat
+
+    # Clone with conditions: allow threads (CLONE_THREAD), block processes
+    conditional:
+      clone:
+        - arg: 0
+          mask: 0x10000    # CLONE_THREAD flag
+          value: 0         # Block when CLONE_THREAD is NOT set
+          action: deny
+
+    # Dangerous syscalls - BLOCKED
+    deny_dangerous:
+      - ptrace
+      - mount
+      - umount2
+      - pivot_root
+      - bpf
+      - perf_event_open
+      - init_module
+      - delete_module
+      - finit_module
+      - keyctl
+      - unshare
+      - setns
+      - setuid
+      - setgid
+      - setresuid
+      - setresgid
+      - setgroups
+      - capset
+      - reboot
+      - kexec_load
+      - kexec_file_load
+      - swapon
+      - swapoff
+      - sethostname
+      - setdomainname
+      - iopl
+      - ioperm
+
+  # WhatsApp Agent Profile - allows network for WhatsApp Web
+  whatsapp_agent:
+    extends: base_restricted
+
+    # Network syscalls needed for WhatsApp/WebSocket
+    allow:
+      - socket
+      - socketpair
+      - connect
+      - accept
+      - accept4
+      - bind
+      - listen
+      - sendto
+      - recvfrom
+      - sendmsg
+      - recvmsg
+      - shutdown
+      - getsockname
+      - getpeername
+      - setsockopt
+      - getsockopt
+      - poll
+      - ppoll
+      - select
+      - pselect6
+      - epoll_create
+      - epoll_create1
+      - epoll_ctl
+      - epoll_wait
+      - epoll_pwait
+
+    # Network policy (enforced via iptables/nftables, not seccomp)
+    network_policy:
+      allow_loopback: true
+      allow_outbound:
+        - "*.whatsapp.net:443"
+        - "*.whatsapp.com:443"
+        - "web.whatsapp.com:443"
+        - "mmg.whatsapp.net:443"
+        - "media.whatsapp.com:443"
+
+  # Telegram Agent Profile
+  telegram_agent:
+    extends: base_restricted
+
+    allow:
+      - socket
+      - socketpair
+      - connect
+      - accept
+      - accept4
+      - bind
+      - listen
+      - sendto
+      - recvfrom
+      - sendmsg
+      - recvmsg
+      - shutdown
+      - getsockname
+      - getpeername
+      - setsockopt
+      - getsockopt
+      - poll
+      - ppoll
+      - select
+      - pselect6
+      - epoll_create
+      - epoll_create1
+      - epoll_ctl
+      - epoll_wait
+      - epoll_pwait
+
+    network_policy:
+      allow_loopback: true
+      allow_outbound:
+        - "api.telegram.org:443"
+        - "*.telegram.org:443"
+
+  # Isolated Agent - no network, pure code execution
+  isolated_agent:
+    extends: base_restricted
+
+    deny:
+      - socket
+      - socketpair
+      - connect
+      - accept
+      - accept4
+      - bind
+      - listen
+      - sendto
+      - recvfrom
+      - sendmsg
+      - recvmsg
+
+    network_policy:
+      allow_loopback: true   # Still allow Sentra API
+      allow_outbound: []
+
+  # Development Profile - permissive for testing
+  development:
+    default: allow
+    deny:
+      - reboot
+      - kexec_load
+      - init_module
+      - delete_module
+    deny_dangerous: []
+
+# =============================================================================
+# v2.2 LAUNCHER CONFIGURATION
+# Settings for openclaw_launcher
+# =============================================================================
+
+launcher:
+  # Default seccomp profile to apply
+  # Use 'gateway' for OpenClaw process (allows spawn)
+  # Use 'whatsapp_agent' or 'isolated_agent' for sandboxed code execution
+  default_profile: gateway
+
+  # Sentra integration
+  sentra:
+    enabled: true
+    mode: repl                              # repl | api
+    binary: /usr/local/bin/sentra
+    shell_wrapper: /usr/local/bin/sentra-shell
+    python_runner: /usr/lib/sentra/python_runner
+
+  # OpenClaw settings
+  openclaw:
+    binary: /usr/local/bin/openclaw
+    gateway_port: 18789
+
+# =============================================================================
 # v2.0 SANDBOX PROFILES
 # Defines named execution profiles for sandboxed code execution
 # =============================================================================
