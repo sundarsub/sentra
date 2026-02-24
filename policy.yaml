@@ -703,9 +703,21 @@ rules:
       executable: "^(make|cmake|ninja|gradle|mvn|maven|ant|bazel|buck|meson|scons)$"
     effect: allow
 
-  - id: interpreters
+  # Python must go through sandbox (python_runner)
+  - id: block_direct_python
     match:
-      executable: "^(python|python3|python2|node|ruby|perl|php|lua|julia|R|Rscript)$"
+      executable: "^(python|python3|python2)$"
+    effect: deny
+    reason: "Direct Python execution blocked - use Sentra sandbox API for Python code"
+
+  - id: allow_python_runner
+    match:
+      executable: "python_runner$"
+    effect: allow
+
+  - id: interpreters_non_python
+    match:
+      executable: "^(node|ruby|perl|php|lua|julia|R|Rscript)$"
     effect: allow
 
   - id: test_runners
@@ -858,4 +870,37 @@ rules:
   - id: network_info
     match:
       executable: "^(ip|ifconfig|netstat|ss|route|arp|ping|traceroute|dig|nslookup|host)$"
+    effect: allow
+
+  # ===========================================================================
+  # OPENCLAW AI AGENT RULES
+  # Rules specifically for OpenClaw AI agent workflows
+  # ===========================================================================
+
+  # Allow gh CLI for GitHub operations (read operations)
+  - id: gh_read_ops
+    match:
+      executable: "^gh$"
+      args_pattern: "^(issue|pr|repo|release|run|workflow|api)\\s+(list|view|status|diff|checks)"
+    effect: allow
+
+  # Block gh write operations that need review
+  - id: gh_write_ops
+    match:
+      executable: "^gh$"
+      args_pattern: "^(issue|pr)\\s+(create|close|merge|edit|delete)"
+    effect: deny
+    reason: "GitHub write operations need manual review"
+
+  # Allow sentra commands
+  - id: allow_sentra
+    match:
+      executable: "sentra$"
+    effect: allow
+
+  # Allow OpenClaw to check its own processes
+  - id: openclaw_process_check
+    match:
+      executable: "^(pgrep|ps)$"
+      args_pattern: "(openclaw|sentra|python_runner)"
     effect: allow
