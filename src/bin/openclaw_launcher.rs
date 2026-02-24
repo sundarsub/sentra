@@ -58,6 +58,11 @@ struct Args {
     #[arg(short, long)]
     verbose: bool,
 
+    /// Skip seccomp lockdown (allows network access, subprocess spawning)
+    /// WARNING: This reduces security - only use for trusted AI agents
+    #[arg(long)]
+    no_seccomp: bool,
+
     /// Remaining arguments passed to OpenClaw
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     openclaw_args: Vec<String>,
@@ -90,15 +95,23 @@ fn main() {
     }
     println!("✓ Sentra API ready");
 
-    // Step 3: Apply seccomp filter (Linux only)
+    // Step 3: Apply seccomp filter (Linux only, unless --no-seccomp)
     #[cfg(target_os = "linux")]
     {
-        println!("→ Applying seccomp lockdown...");
-        if let Err(e) = apply_openclaw_seccomp(args.port, args.verbose) {
-            eprintln!("ERROR: Failed to apply seccomp: {}", e);
-            std::process::exit(1);
+        if args.no_seccomp {
+            println!("⚠ WARNING: Seccomp lockdown DISABLED by --no-seccomp flag");
+            println!("  OpenClaw will have full system access");
+            println!("  Network access: ALLOWED");
+            println!("  Subprocess spawning: ALLOWED");
+            println!();
+        } else {
+            println!("→ Applying seccomp lockdown...");
+            if let Err(e) = apply_openclaw_seccomp(args.port, args.verbose) {
+                eprintln!("ERROR: Failed to apply seccomp: {}", e);
+                std::process::exit(1);
+            }
+            println!("✓ Seccomp filter applied - process locked");
         }
-        println!("✓ Seccomp filter applied - process locked");
     }
 
     #[cfg(not(target_os = "linux"))]
