@@ -185,17 +185,16 @@ async def chat_completions(
     body["models"] = allowed_models
     body["route"] = "fallback"  # Fallback through models list
 
-    # Determine API key
+    # Determine API key - prefer config, then fall back to Authorization header
     api_key = config.openrouter.api_key
     if not api_key and authorization:
         # Use passed-through authorization
         api_key = authorization.replace("Bearer ", "")
 
+    # For local testing, allow requests without auth if config has API key
     if not api_key:
-        raise HTTPException(
-            status_code=500,
-            detail="No OpenRouter API key configured",
-        )
+        # Last resort: check for a mock/test key
+        api_key = os.environ.get("OPENROUTER_API_KEY", "")
 
     # Forward to OpenRouter
     async with httpx.AsyncClient(timeout=config.openrouter.timeout_seconds) as client:

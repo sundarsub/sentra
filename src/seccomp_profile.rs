@@ -473,7 +473,10 @@ mod tests {
     fn test_profile_not_found() {
         let profiles = HashMap::new();
         let result = SeccompProfile::resolve("nonexistent", &profiles);
-        assert!(matches!(result, Err(SeccompProfileError::ProfileNotFound(_))));
+        assert!(matches!(
+            result,
+            Err(SeccompProfileError::ProfileNotFound(_))
+        ));
     }
 
     #[test]

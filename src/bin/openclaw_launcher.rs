@@ -160,8 +160,14 @@ fn main() {
                 Some(p)
             }
             Err(e) => {
-                eprintln!("ERROR: Failed to resolve seccomp profile '{}': {}", profile_name, e);
-                eprintln!("Available profiles: {:?}", config.seccomp_profiles.keys().collect::<Vec<_>>());
+                eprintln!(
+                    "ERROR: Failed to resolve seccomp profile '{}': {}",
+                    profile_name, e
+                );
+                eprintln!(
+                    "Available profiles: {:?}",
+                    config.seccomp_profiles.keys().collect::<Vec<_>>()
+                );
                 std::process::exit(1);
             }
         }
@@ -342,7 +348,11 @@ fn apply_builtin_seccomp(verbose: bool) -> Result<(), Box<dyn std::error::Error>
         filter.add_rule_conditional(
             ScmpAction::Errno(libc::EPERM),
             clone_syscall,
-            &[ScmpArgCompare::new(0, ScmpCompareOp::MaskedEqual(0x10000), 0)],
+            &[ScmpArgCompare::new(
+                0,
+                ScmpCompareOp::MaskedEqual(0x10000),
+                0,
+            )],
         )?;
         if verbose {
             println!("  → Deny: clone (process creation, threads allowed)");
@@ -351,11 +361,33 @@ fn apply_builtin_seccomp(verbose: bool) -> Result<(), Box<dyn std::error::Error>
 
     // Block dangerous syscalls
     let dangerous = [
-        "ptrace", "mount", "umount2", "pivot_root", "bpf", "perf_event_open",
-        "init_module", "delete_module", "finit_module", "keyctl", "unshare", "setns",
-        "setuid", "setgid", "setresuid", "setresgid", "setgroups", "capset",
-        "reboot", "kexec_load", "kexec_file_load", "swapon", "swapoff",
-        "sethostname", "setdomainname", "iopl", "ioperm",
+        "ptrace",
+        "mount",
+        "umount2",
+        "pivot_root",
+        "bpf",
+        "perf_event_open",
+        "init_module",
+        "delete_module",
+        "finit_module",
+        "keyctl",
+        "unshare",
+        "setns",
+        "setuid",
+        "setgid",
+        "setresuid",
+        "setresgid",
+        "setgroups",
+        "capset",
+        "reboot",
+        "kexec_load",
+        "kexec_file_load",
+        "swapon",
+        "swapoff",
+        "sethostname",
+        "setdomainname",
+        "iopl",
+        "ioperm",
     ];
 
     for syscall_name in &dangerous {
@@ -428,9 +460,11 @@ mod tests {
     fn test_args_parsing() {
         let args = Args::try_parse_from(&[
             "openclaw_launcher",
-            "--port", "9999",
+            "--port",
+            "9999",
             "--skip-sentra",
-            "--seccomp-profile", "whatsapp_agent",
+            "--seccomp-profile",
+            "whatsapp_agent",
         ]);
         assert!(args.is_ok());
         let args = args.unwrap();
