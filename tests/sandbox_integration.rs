@@ -190,6 +190,7 @@ print('finished')
 
 #[test]
 #[cfg(target_os = "linux")]
+#[ignore] // Requires cgroups - not available in CI
 fn test_memory_limit_exceeded() {
     let executor = create_executor();
     // Try to allocate a large list
@@ -357,6 +358,7 @@ fn test_division_by_zero() {
 
 #[test]
 #[cfg(target_os = "linux")]
+#[ignore] // Requires network namespace - not available in CI
 fn test_forbidden_network_access() {
     let executor = create_executor();
     let code = r#"
@@ -834,6 +836,7 @@ fn test_platform_warning_on_macos() {
 
 #[test]
 #[cfg(target_os = "linux")]
+#[ignore] // Requires cgroups - not available in CI
 fn test_linux_memory_tracking() {
     let executor = create_executor();
     let code = r#"
