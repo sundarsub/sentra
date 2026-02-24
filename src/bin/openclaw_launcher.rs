@@ -170,8 +170,11 @@ fn wait_for_sentra(port: u16, timeout: Duration) -> bool {
 
 /// Apply seccomp filter for OpenClaw lockdown (Linux only)
 #[cfg(target_os = "linux")]
-fn apply_openclaw_seccomp(sentra_port: u16, verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
-    use libseccomp::{ScmpAction, ScmpFilterContext, ScmpSyscall, ScmpArgCompare, ScmpCompareOp};
+fn apply_openclaw_seccomp(
+    sentra_port: u16,
+    verbose: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use libseccomp::{ScmpAction, ScmpArgCompare, ScmpCompareOp, ScmpFilterContext, ScmpSyscall};
     use nix::libc;
 
     // Set NO_NEW_PRIVS (required for unprivileged seccomp)
@@ -193,10 +196,7 @@ fn apply_openclaw_seccomp(sentra_port: u16, verbose: bool) -> Result<(), Box<dyn
     // 2. Without fork, execve can only replace the current process
     // 3. subprocess.run() needs fork+exec, so blocking fork is enough
     // ═══════════════════════════════════════════════════════════
-    let fork_syscalls = [
-        "fork",
-        "vfork",
-    ];
+    let fork_syscalls = ["fork", "vfork"];
 
     for syscall_name in &fork_syscalls {
         if let Ok(syscall) = ScmpSyscall::from_name(syscall_name) {
@@ -218,7 +218,11 @@ fn apply_openclaw_seccomp(sentra_port: u16, verbose: bool) -> Result<(), Box<dyn
         filter.add_rule_conditional(
             ScmpAction::Errno(libc::EPERM),
             clone_syscall,
-            &[ScmpArgCompare::new(0, ScmpCompareOp::MaskedEqual(0x10000), 0)],
+            &[ScmpArgCompare::new(
+                0,
+                ScmpCompareOp::MaskedEqual(0x10000),
+                0,
+            )],
         )?;
         if verbose {
             println!("  → Blocking syscall: clone (process creation, threading allowed)");
@@ -373,7 +377,10 @@ fn exec_openclaw(openclaw_bin: &str, args: &[String]) -> ! {
 
 /// Non-Linux: Stub for seccomp
 #[cfg(not(target_os = "linux"))]
-fn apply_openclaw_seccomp(_sentra_port: u16, _verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
+fn apply_openclaw_seccomp(
+    _sentra_port: u16,
+    _verbose: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
@@ -384,11 +391,7 @@ mod tests {
     #[test]
     fn test_args_parsing() {
         // Test that Args can be parsed (basic sanity check)
-        let args = Args::try_parse_from(&[
-            "openclaw_launcher",
-            "--port", "9999",
-            "--skip-sentra",
-        ]);
+        let args = Args::try_parse_from(&["openclaw_launcher", "--port", "9999", "--skip-sentra"]);
         assert!(args.is_ok());
         let args = args.unwrap();
         assert_eq!(args.port, 9999);

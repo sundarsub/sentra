@@ -92,9 +92,8 @@ fn main() {
                 error: e.to_string(),
                 stage: "runner".to_string(),
             };
-            let json = serde_json::to_string(&error_response).unwrap_or_else(|_| {
-                format!(r#"{{"error": "{}"}}"#, e)
-            });
+            let json = serde_json::to_string(&error_response)
+                .unwrap_or_else(|_| format!(r#"{{"error": "{}"}}"#, e));
             println!("{}", json);
             std::process::exit(1);
         }
@@ -234,7 +233,7 @@ fn drop_privileges() -> Result<(), Box<dyn std::error::Error>> {
     // Drop all capabilities if caps crate is available
     #[cfg(feature = "caps")]
     {
-        use caps::{CapSet, Capability, clear};
+        use caps::{clear, CapSet, Capability};
         // Clear all capability sets
         let _ = clear(None, CapSet::Effective);
         let _ = clear(None, CapSet::Permitted);
@@ -264,13 +263,13 @@ fn execute_python(request: &SandboxRequest) -> Result<SandboxResponse, Box<dyn s
 
     // Build Python command
     let mut cmd = Command::new("python3");
-    cmd.arg("-u")       // Unbuffered output
-       .arg("-B")       // Don't write .pyc files
-       .arg(&code_file)
-       .current_dir(&request.cwd)
-       .stdin(Stdio::null())
-       .stdout(Stdio::piped())
-       .stderr(Stdio::piped());
+    cmd.arg("-u") // Unbuffered output
+        .arg("-B") // Don't write .pyc files
+        .arg(&code_file)
+        .current_dir(&request.cwd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
     // Clear environment and set minimal env vars
     cmd.env_clear();
@@ -286,7 +285,8 @@ fn execute_python(request: &SandboxRequest) -> Result<SandboxResponse, Box<dyn s
     }
 
     // Spawn the Python process
-    let mut child = cmd.spawn()
+    let mut child = cmd
+        .spawn()
         .map_err(|e| format!("Failed to spawn Python: {}", e))?;
 
     // Wait for completion with timeout handling
@@ -359,7 +359,7 @@ fn execute_python(request: &SandboxRequest) -> Result<SandboxResponse, Box<dyn s
 
 /// Calculate SHA256 hash of a string
 fn calculate_sha256(data: &str) -> String {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(data.as_bytes());
     format!("{:x}", hasher.finalize())
