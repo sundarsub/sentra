@@ -284,8 +284,19 @@ echo ""
 echo -e "${BLUE}→ Verifying installation...${NC}"
 
 if [ -x "$INSTALL_DIR/sentra" ]; then
-    VERSION=$("$INSTALL_DIR/sentra" --version 2>/dev/null || echo "unknown")
-    echo -e "${GREEN}  ✓ sentra: $VERSION${NC}"
+    VERSION=$("$INSTALL_DIR/sentra" --version 2>&1 || echo "")
+    if echo "$VERSION" | grep -q "GLIBC"; then
+        echo -e "${YELLOW}  → sentra: Binary requires newer GLIBC${NC}"
+        echo -e "${YELLOW}    To fix, build from source:${NC}"
+        echo -e "${YELLOW}    curl https://sh.rustup.rs -sSf | sh${NC}"
+        echo -e "${YELLOW}    git clone https://github.com/sundarsub/sentra.git${NC}"
+        echo -e "${YELLOW}    cd sentra && cargo build --release${NC}"
+        echo -e "${YELLOW}    sudo cp target/release/{sentra,openclaw_launcher,python_runner} /usr/local/bin/${NC}"
+    elif [ -n "$VERSION" ]; then
+        echo -e "${GREEN}  ✓ sentra: $VERSION${NC}"
+    else
+        echo -e "${GREEN}  ✓ sentra: installed${NC}"
+    fi
 else
     echo -e "${RED}  ✗ sentra not found${NC}"
 fi
