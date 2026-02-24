@@ -2,10 +2,9 @@
 //!
 //! This is the main entry point for sandboxed Python execution.
 
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use sha2::{Sha256, Digest};
-
 
 /// Request to execute code in sandbox
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -106,9 +105,12 @@ impl SandboxExecutor {
 
     /// Execute code in sandbox (non-Linux fallback - reduced security)
     #[cfg(not(target_os = "linux"))]
-    pub fn execute(&self, request: &SandboxRequest) -> Result<SandboxResponse, Box<dyn std::error::Error>> {
-        use std::process::{Command, Stdio};
+    pub fn execute(
+        &self,
+        request: &SandboxRequest,
+    ) -> Result<SandboxResponse, Box<dyn std::error::Error>> {
         use std::io::Read;
+        use std::process::{Command, Stdio};
 
         eprintln!("WARNING: Running in reduced-security mode (not Linux)");
 
@@ -193,9 +195,12 @@ impl SandboxExecutor {
     /// Execute code in full sandbox (Linux)
     /// Note: cgroup resource limits disabled pending module resolution fix
     #[cfg(target_os = "linux")]
-    pub fn execute(&self, request: &SandboxRequest) -> Result<SandboxResponse, Box<dyn std::error::Error>> {
-        use std::process::{Command, Stdio};
+    pub fn execute(
+        &self,
+        request: &SandboxRequest,
+    ) -> Result<SandboxResponse, Box<dyn std::error::Error>> {
         use std::io::Read;
+        use std::process::{Command, Stdio};
 
         let start = Instant::now();
         let code_hash = request.code_hash();
@@ -295,7 +300,9 @@ mod tests {
         assert_eq!(req.timeout_sec, 30);
         assert_eq!(req.mem_max_mb, 512);
         assert_eq!(req.profile, "python_sandbox_v1");
-        assert_eq!(req.cwd, "/work");
+        // cwd defaults to temp dir for cross-platform compatibility
+        let expected_cwd = std::env::temp_dir().to_string_lossy().to_string();
+        assert_eq!(req.cwd, expected_cwd);
     }
 
     #[test]

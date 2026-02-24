@@ -24,7 +24,7 @@ impl Default for NamespaceConfig {
         Self {
             new_mount_ns: true,
             new_pid_ns: true,
-            new_net_ns: true,  // No network by default
+            new_net_ns: true,   // No network by default
             new_user_ns: false, // Requires additional UID mapping setup
         }
     }
@@ -97,8 +97,8 @@ impl NamespaceBuilder {
 #[cfg(target_os = "linux")]
 mod linux_impl {
     use super::*;
-    use nix::sched::{unshare, CloneFlags};
     use nix::mount::{mount, MsFlags};
+    use nix::sched::{unshare, CloneFlags};
     use std::fs;
 
     impl NamespaceConfig {

@@ -70,7 +70,11 @@ fn test_simple_print_statement() {
     let request = make_request("print('hello world')");
 
     let result = executor.execute(&request);
-    assert!(result.is_ok(), "Execution should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Execution should succeed: {:?}",
+        result.err()
+    );
 
     let response = result.unwrap();
     assert_eq!(response.exit_code, 0, "Exit code should be 0");
@@ -151,7 +155,10 @@ fn test_timeout_infinite_loop() {
     assert!(result.is_ok());
     let response = result.unwrap();
     assert!(response.timed_out, "Should have timed out on Linux");
-    assert!(response.wall_time_ms >= 2000, "Should have run for at least 2 seconds");
+    assert!(
+        response.wall_time_ms >= 2000,
+        "Should have run for at least 2 seconds"
+    );
 }
 
 // This test only runs on Linux because macOS fallback doesn't enforce timeouts
@@ -171,7 +178,10 @@ print('finished')
     assert!(result.is_ok());
     let response = result.unwrap();
     assert!(response.timed_out, "Should have timed out");
-    assert!(!response.stdout.contains("finished"), "Should not have finished");
+    assert!(
+        !response.stdout.contains("finished"),
+        "Should not have finished"
+    );
 }
 
 // =============================================================================
@@ -196,7 +206,10 @@ print(f'Allocated {len(data)} MB')
 
     let response = result.unwrap();
     // Process should be killed due to OOM
-    assert_ne!(response.exit_code, 0, "Should have failed due to memory limit");
+    assert_ne!(
+        response.exit_code, 0,
+        "Should have failed due to memory limit"
+    );
 }
 
 #[test]
@@ -231,7 +244,10 @@ fn test_syntax_error() {
     assert!(result.is_ok(), "Executor should not error on syntax errors");
 
     let response = result.unwrap();
-    assert_ne!(response.exit_code, 0, "Exit code should be non-zero for syntax error");
+    assert_ne!(
+        response.exit_code, 0,
+        "Exit code should be non-zero for syntax error"
+    );
     // Python puts syntax errors on stderr
     assert!(
         response.stderr.contains("SyntaxError") || response.stderr.contains("syntax"),
@@ -560,7 +576,9 @@ import os
 print(os.environ.get('TEST_VAR', 'NOT_SET'))
 "#;
     let mut request = make_request(code);
-    request.env.insert("TEST_VAR".to_string(), "hello_from_env".to_string());
+    request
+        .env
+        .insert("TEST_VAR".to_string(), "hello_from_env".to_string());
 
     let result = executor.execute(&request);
 
@@ -610,7 +628,9 @@ print(squares)
 
     let response = result.unwrap();
     assert_eq!(response.exit_code, 0);
-    assert!(response.stdout.contains("[0, 1, 4, 9, 16, 25, 36, 49, 64, 81]"));
+    assert!(response
+        .stdout
+        .contains("[0, 1, 4, 9, 16, 25, 36, 49, 64, 81]"));
 }
 
 #[test]
@@ -733,7 +753,9 @@ fn test_sandbox_request_defaults() {
     assert_eq!(request.max_stdout_bytes, 200_000);
     assert_eq!(request.max_stderr_bytes, 200_000);
     assert_eq!(request.profile, "python_sandbox_v1");
-    assert_eq!(request.cwd, "/work");
+    // cwd defaults to temp dir for cross-platform compatibility
+    let expected_cwd = std::env::temp_dir().to_string_lossy().to_string();
+    assert_eq!(request.cwd, expected_cwd);
 }
 
 #[test]

@@ -489,8 +489,7 @@ mod tests {
 
     #[test]
     fn test_audit_entry_with_sandbox_fields() {
-        let metrics = SandboxMetrics::new(1500, 256, false)
-            .with_truncation(false, false);
+        let metrics = SandboxMetrics::new(1500, 256, false).with_truncation(false, false);
 
         let entry = AuditEntry {
             timestamp: Utc::now(),
@@ -533,8 +532,8 @@ mod tests {
         assert!(!json.contains("truncated_stdout"));
         assert!(!json.contains("truncated_stderr"));
 
-        let metrics_with_truncation = SandboxMetrics::new(1000, 128, false)
-            .with_truncation(true, false);
+        let metrics_with_truncation =
+            SandboxMetrics::new(1000, 128, false).with_truncation(true, false);
         let json2 = serde_json::to_string(&metrics_with_truncation).unwrap();
         assert!(json2.contains("\"truncated_stdout\":true"));
         assert!(json2.contains("\"truncated_stderr\":false"));
