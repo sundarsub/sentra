@@ -290,7 +290,7 @@ checksum = "dea2df4cf52843e0452895c455a1a2cfbb842a1e7329671acf418fdc53ed4c59"
 
 [[package]]
 name = "execwall"
-version = "3.0.0"
+version = "1.0.0"
 dependencies = [
  "caps",
  "chrono",
