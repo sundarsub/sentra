@@ -4,7 +4,10 @@
 
 Deploy a secure AI agent execution environment on **Oracle Cloud Free Tier** - run your own WhatsApp AI assistant with enterprise-grade security.
 
+[![GitHub stars](https://img.shields.io/github/stars/sundarsub/sentra?style=social)](https://github.com/sundarsub/sentra/stargazers)
 [![Deploy on Oracle Cloud](https://img.shields.io/badge/Deploy-Oracle%20Cloud%20Free%20Tier-F80000?style=for-the-badge&logo=oracle)](docs/ORACLE_CLOUD_DEPLOYMENT.md)
+
+> **If Sentra helps you, consider giving it a star** - it helps others discover the project!
 
 ## What is Sentra?
 
@@ -1431,6 +1434,18 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 ```
 
 See [sentra-or-gate/README.md](sentra-or-gate/README.md) for full documentation.
+
+---
+
+## Support the Project
+
+If Sentra has been useful for your AI agent security needs:
+
+- **Star this repo** - helps others discover Sentra
+- **Share** - tell others about secure AI agent execution
+- **Contribute** - PRs and issues welcome
+
+[![Star History](https://img.shields.io/github/stars/sundarsub/sentra?style=social)](https://github.com/sundarsub/sentra/stargazers)
 
 ## License
 
