@@ -460,7 +460,10 @@ fn execute_command(command: &str) -> i32 {
 /// Print help message
 fn print_help() {
     println!();
-    println!("{}", "Execwall - Execution Firewall for AI Agents".cyan().bold());
+    println!(
+        "{}",
+        "Execwall - Execution Firewall for AI Agents".cyan().bold()
+    );
     println!();
     println!("{}", "Built-in Commands:".yellow());
     println!("  {}     Show this help message", "help".cyan());

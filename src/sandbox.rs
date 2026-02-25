@@ -316,7 +316,10 @@ mod tests {
     #[test]
     fn test_sandbox_executor_new() {
         let executor = SandboxExecutor::new("/usr/lib/execwall/python_runner");
-        assert_eq!(executor.python_runner_path, "/usr/lib/execwall/python_runner");
+        assert_eq!(
+            executor.python_runner_path,
+            "/usr/lib/execwall/python_runner"
+        );
     }
 
     #[test]

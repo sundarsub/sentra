@@ -191,7 +191,10 @@ fn main() {
     } else if args.execwall_repl && !args.skip_execwall {
         // REPL mode: verify execwall-shell exists
         if !std::path::Path::new(&args.execwall_shell).exists() {
-            eprintln!("ERROR: execwall-shell not found at: {}", args.execwall_shell);
+            eprintln!(
+                "ERROR: execwall-shell not found at: {}",
+                args.execwall_shell
+            );
             eprintln!("Create it or specify path with --execwall-shell");
             std::process::exit(1);
         }
