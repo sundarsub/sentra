@@ -663,6 +663,23 @@ syscall_profiles:
 
 rules:
   # ===========================================================================
+  # EMAIL AND MESSAGING TOOLS
+  # Allow email clients and helper scripts for AI agent communication
+  # ===========================================================================
+
+  # Email helper scripts (send-email, email commands)
+  - id: allow_email_scripts
+    match:
+      executable: "^(email|send-email)$"
+    effect: allow
+
+  # Himalaya CLI email client
+  - id: allow_himalaya
+    match:
+      executable: "^himalaya$"
+    effect: allow
+
+  # ===========================================================================
   # DANGEROUS DESTRUCTIVE COMMANDS - ALWAYS DENY (highest priority)
   # ===========================================================================
 

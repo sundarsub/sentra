@@ -1,0 +1,50 @@
+#!/bin/bash
+# General email sender for OpenClaw/Sentra
+# Usage: email <recipient> <subject> <body>
+#    or: email --to <recipient> --subject <subject> --body <body>
+
+usage() {
+    echo "Usage: email <recipient> <subject> <body>"
+    echo "   or: email --to <recipient> --subject <subject> --body <body>"
+    exit 1
+}
+
+# Parse arguments
+if [[ "$1" == "--to" ]]; then
+    # Named arguments style
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --to) TO="$2"; shift 2 ;;
+            --subject) SUBJECT="$2"; shift 2 ;;
+            --body) BODY="$2"; shift 2 ;;
+            *) shift ;;
+        esac
+    done
+else
+    # Positional arguments
+    TO="$1"
+    SUBJECT="$2"
+    BODY="$3"
+fi
+
+# Validate
+[[ -z "$TO" || -z "$SUBJECT" || -z "$BODY" ]] && usage
+
+# Get sender from environment or use default
+FROM="${EMAIL_FROM:-sentra@lma.llc}"
+
+# Send via himalaya
+cat << MSGEOF | himalaya template send
+From: $FROM
+To: $TO
+Subject: $SUBJECT
+
+$BODY
+MSGEOF
+
+if [ $? -eq 0 ]; then
+    echo "Email sent to $TO"
+else
+    echo "Failed to send email" >&2
+    exit 1
+fi

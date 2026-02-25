@@ -25,6 +25,12 @@ POLICY_FILE="${SENTRA_POLICY:-/etc/sentra/policy.yaml}"
 PYTHON_RUNNER="${PYTHON_RUNNER:-/usr/lib/sentra/python_runner}"
 QUIET="${SENTRA_QUIET:-1}"
 
+# Build base args (quiet mode uses native --quiet flag)
+QUIET_ARG=""
+if [[ "$QUIET" = "1" ]]; then
+    QUIET_ARG="--quiet"
+fi
+
 # Check if Sentra exists
 if [[ ! -x "$SENTRA_BIN" ]]; then
     echo "sentra-shell: ERROR: Sentra not found at $SENTRA_BIN" >&2
@@ -47,17 +53,6 @@ if [[ -x "$PYTHON_RUNNER" ]]; then
     SENTRA_ARGS+=("--python-runner" "$PYTHON_RUNNER")
 fi
 
-# Filter output function - removes Sentra banner and status lines
-# This keeps command output clean for programmatic consumption
-filter_output() {
-    if [[ "$QUIET" = "1" ]]; then
-        # Filter Sentra UI elements: box drawing, status indicators, help text
-        grep -v -E "^$|^╔|^║|^╚|^═|^✓ |^✗ |^Warning:|^Policy:|^Type 'help'|^→ |^Session |^  Commands |^  Audit |ENFORCE MODE|─|│|┌|┐|└|┘|├|┤|┬|┴|┼|^Loading|^Loaded|^Starting|^Started|^Ready|^Initializ|EOF received|for help"
-    else
-        cat
-    fi
-}
-
 # Handle different invocation modes
 case "$1" in
     -c)
@@ -73,17 +68,17 @@ case "$1" in
             echo "sentra-shell: executing: $*" >&2
         fi
 
-        echo "$*" | "$SENTRA_BIN" "${SENTRA_ARGS[@]}" 2>&1 | filter_output
+        echo "$*" | "$SENTRA_BIN" $QUIET_ARG "${SENTRA_ARGS[@]}" 2>&1
         ;;
 
     -i)
-        # Interactive mode (explicit) - no filtering
+        # Interactive mode (explicit)
         shift
         exec "$SENTRA_BIN" "${SENTRA_ARGS[@]}" "$@"
         ;;
 
     "")
-        # No arguments: interactive REPL - no filtering
+        # No arguments: interactive REPL
         exec "$SENTRA_BIN" "${SENTRA_ARGS[@]}"
         ;;
 
@@ -99,14 +94,14 @@ case "$1" in
             fi
 
             # Read script and pipe to Sentra
-            cat "$SCRIPT" | "$SENTRA_BIN" "${SENTRA_ARGS[@]}" 2>&1 | filter_output
+            cat "$SCRIPT" | "$SENTRA_BIN" $QUIET_ARG "${SENTRA_ARGS[@]}" 2>&1
         else
             # Treat as command string (fallback)
             if [[ -n "$SENTRA_VERBOSE" ]]; then
                 echo "sentra-shell: executing: $*" >&2
             fi
 
-            echo "$*" | "$SENTRA_BIN" "${SENTRA_ARGS[@]}" 2>&1 | filter_output
+            echo "$*" | "$SENTRA_BIN" $QUIET_ARG "${SENTRA_ARGS[@]}" 2>&1
         fi
         ;;
 esac

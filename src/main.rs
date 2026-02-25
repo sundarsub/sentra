@@ -42,6 +42,10 @@ struct Args {
     #[arg(short, long)]
     verbose: bool,
 
+    /// Quiet mode - suppress banner and status messages
+    #[arg(short, long)]
+    quiet: bool,
+
     /// Run in JSON API mode (TCP server)
     #[arg(long)]
     api: bool,
@@ -64,29 +68,33 @@ fn main() {
         return;
     }
 
-    // Banner
-    println!(
-        "{}",
-        "╔══════════════════════════════════════════════════════════╗".cyan()
-    );
-    println!(
-        "{}",
-        "║              Sentra - Execution Governance               ║".cyan()
-    );
-    println!(
-        "{}",
-        "║         Universal Shell with Policy Enforcement          ║".cyan()
-    );
-    println!(
-        "{}",
-        "╚══════════════════════════════════════════════════════════╝".cyan()
-    );
-    println!();
+    // Banner (skip in quiet mode)
+    if !args.quiet {
+        println!(
+            "{}",
+            "╔══════════════════════════════════════════════════════════╗".cyan()
+        );
+        println!(
+            "{}",
+            "║              Sentra - Execution Governance               ║".cyan()
+        );
+        println!(
+            "{}",
+            "║         Universal Shell with Policy Enforcement          ║".cyan()
+        );
+        println!(
+            "{}",
+            "╚══════════════════════════════════════════════════════════╝".cyan()
+        );
+        println!();
+    }
 
     // Load policy
     let engine = match PolicyEngine::load_from_file(&args.policy) {
         Ok(e) => {
-            println!("{} Loaded policy from: {}", "✓".green(), args.policy);
+            if !args.quiet {
+                println!("{} Loaded policy from: {}", "✓".green(), args.policy);
+            }
             e
         }
         Err(e) => {
@@ -99,17 +107,21 @@ fn main() {
     };
 
     // Show policy info
-    println!("{} {}", "Policy:".cyan(), engine.info());
+    if !args.quiet {
+        println!("{} {}", "Policy:".cyan(), engine.info());
+    }
 
     // Initialize rate limiter from policy config
     let rate_config = engine.rate_limit_config();
     let mut rate_limiter = RateLimiter::new(rate_config.max_commands, rate_config.window_seconds);
-    println!(
-        "{} Rate limit: {} commands per {} seconds",
-        "✓".green(),
-        rate_config.max_commands,
-        rate_config.window_seconds
-    );
+    if !args.quiet {
+        println!(
+            "{} Rate limit: {} commands per {} seconds",
+            "✓".green(),
+            rate_config.max_commands,
+            rate_config.window_seconds
+        );
+    }
 
     // Determine identity
     let identity = args.identity.clone().unwrap_or_else(|| {
@@ -117,15 +129,19 @@ fn main() {
             .map(|u| u.to_string_lossy().to_string())
             .unwrap_or_else(|| "unknown".to_string())
     });
-    println!("{} Identity: {}", "✓".green(), identity);
+    if !args.quiet {
+        println!("{} Identity: {}", "✓".green(), identity);
+    }
 
     // Check for mode override
     let effective_mode = match &args.mode {
         Some(m) if m == "audit" => {
-            println!(
-                "{} Mode overridden to AUDIT (log only, no blocking)",
-                "⚠".yellow()
-            );
+            if !args.quiet {
+                println!(
+                    "{} Mode overridden to AUDIT (log only, no blocking)",
+                    "⚠".yellow()
+                );
+            }
             true
         }
         _ => *engine.mode() == PolicyMode::Audit,
@@ -134,65 +150,73 @@ fn main() {
     // Initialize audit logger
     let logger = match AuditLogger::new(&args.log) {
         Ok(l) => {
-            println!("{} Audit log: {}", "✓".green(), args.log);
+            if !args.quiet {
+                println!("{} Audit log: {}", "✓".green(), args.log);
+            }
             l
         }
         Err(e) => {
-            eprintln!(
-                "{} Failed to initialize audit log: {}",
-                "Warning:".yellow(),
-                e
-            );
-            eprintln!("  Continuing without file logging...");
+            if !args.quiet {
+                eprintln!(
+                    "{} Failed to initialize audit log: {}",
+                    "Warning:".yellow(),
+                    e
+                );
+                eprintln!("  Continuing without file logging...");
+            }
             AuditLogger::stdout_only()
         }
     };
 
-    println!("{} Session: {}", "✓".green(), logger.session_id());
-    println!();
+    if !args.quiet {
+        println!("{} Session: {}", "✓".green(), logger.session_id());
+        println!();
+    }
 
     // Log session start
     logger.log_session_start(&engine.info());
 
-    // Show mode indicator
-    if effective_mode {
+    // Show mode indicator (skip in quiet mode)
+    if !args.quiet {
+        if effective_mode {
+            println!(
+                "{}",
+                "═══════════════════════════════════════════════════════════".yellow()
+            );
+            println!(
+                "{}",
+                "  AUDIT MODE - Commands will be logged but NOT blocked    "
+                    .yellow()
+                    .bold()
+            );
+            println!(
+                "{}",
+                "═══════════════════════════════════════════════════════════".yellow()
+            );
+        } else {
+            println!(
+                "{}",
+                "═══════════════════════════════════════════════════════════".cyan()
+            );
+            println!(
+                "{}",
+                "  ENFORCE MODE - Denied commands will be blocked          "
+                    .cyan()
+                    .bold()
+            );
+            println!(
+                "{}",
+                "═══════════════════════════════════════════════════════════".cyan()
+            );
+        }
+        println!();
         println!(
-            "{}",
-            "═══════════════════════════════════════════════════════════".yellow()
+            "Type {} for help, {} to exit",
+            "'help'".cyan(),
+            "'exit'".cyan()
         );
-        println!(
-            "{}",
-            "  AUDIT MODE - Commands will be logged but NOT blocked    "
-                .yellow()
-                .bold()
-        );
-        println!(
-            "{}",
-            "═══════════════════════════════════════════════════════════".yellow()
-        );
-    } else {
-        println!(
-            "{}",
-            "═══════════════════════════════════════════════════════════".cyan()
-        );
-        println!(
-            "{}",
-            "  ENFORCE MODE - Denied commands will be blocked          "
-                .cyan()
-                .bold()
-        );
-        println!(
-            "{}",
-            "═══════════════════════════════════════════════════════════".cyan()
-        );
+        println!();
     }
-    println!();
-    println!(
-        "Type {} for help, {} to exit",
-        "'help'".cyan(),
-        "'exit'".cyan()
-    );
-    println!();
 
     // Start interactive shell
     let mut commands_executed: u64 = 0;
@@ -206,13 +230,17 @@ fn main() {
         .unwrap_or_else(|_| ".".to_string());
 
     loop {
-        // Build prompt
-        let mode_indicator = if effective_mode {
-            "audit".yellow()
+        // Build prompt (simple in quiet mode)
+        let prompt = if args.quiet {
+            "$ ".to_string()
         } else {
-            "enforce".green()
+            let mode_indicator = if effective_mode {
+                "audit".yellow()
+            } else {
+                "enforce".green()
+            };
+            format!("[sentra:{}]$ ", mode_indicator)
         };
-        let prompt = format!("[sentra:{}]$ ", mode_indicator);
 
         match rl.readline(&prompt) {
             Ok(line) => {
@@ -229,7 +257,9 @@ fn main() {
                 // Handle built-in commands
                 match input {
                     "exit" | "quit" => {
-                        println!("{} Exiting sentra...", "→".cyan());
+                        if !args.quiet {
+                            println!("{} Exiting sentra...", "→".cyan());
+                        }
                         break;
                     }
                     "help" => {
@@ -377,7 +407,9 @@ fn main() {
                 continue;
             }
             Err(ReadlineError::Eof) => {
-                println!("{} EOF received, exiting...", "→".cyan());
+                if !args.quiet {
+                    println!("{} EOF received, exiting...", "→".cyan());
+                }
                 break;
             }
             Err(err) => {
@@ -390,16 +422,18 @@ fn main() {
     // Log session end
     logger.log_session_end(commands_executed, commands_denied);
 
-    // Summary
-    println!();
-    println!("{}", "Session Summary:".cyan().bold());
-    println!(
-        "  Commands executed: {}",
-        commands_executed.to_string().green()
-    );
-    println!("  Commands denied:   {}", commands_denied.to_string().red());
-    println!("  Audit log:         {}", logger.log_path());
-    println!();
+    // Summary (skip in quiet mode)
+    if !args.quiet {
+        println!();
+        println!("{}", "Session Summary:".cyan().bold());
+        println!(
+            "  Commands executed: {}",
+            commands_executed.to_string().green()
+        );
+        println!("  Commands denied:   {}", commands_denied.to_string().red());
+        println!("  Audit log:         {}", logger.log_path());
+        println!();
+    }
 }
 
 /// Execute a shell command and return exit code
