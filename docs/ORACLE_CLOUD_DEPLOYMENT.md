@@ -1,6 +1,19 @@
-# OpenClaw Execution Firewall - Oracle Cloud Deployment Guide
+# OpenClaw + Sentra - Oracle Cloud Deployment Guide
 
-Deploy a secure AI agent execution environment on **Oracle Cloud Free Tier** with WhatsApp integration, Sentra REPL command governance, and Python sandbox isolation.
+Deploy a secure AI agent environment on **Oracle Cloud Free Tier** with:
+- **WhatsApp** integration for messaging
+- **Email** support via Himalaya
+- **OpenRouter** LLM (Claude, GPT-4, etc.)
+- **Sentra** command governance
+
+## Deployment Options
+
+| Mode | Security | Use Case |
+|------|----------|----------|
+| **Standard** (recommended) | Sentra REPL policy enforcement | WhatsApp + Email + OpenRouter |
+| **Seccomp** | Sentra + kernel syscall filtering | High-security environments |
+
+This guide covers the **Standard** deployment.
 
 ## Architecture Overview
 
@@ -13,30 +26,25 @@ Deploy a secure AI agent execution environment on **Oracle Cloud Free Tier** wit
 │              ARM64 Ampere A1 - 4 CPU, 24GB RAM                │
 │                                                                │
 │  ┌─────────────────────────────────────────────────────────┐  │
-│  │                  openclaw_launcher                       │  │
-│  │  • Applies seccomp profile (gateway)                     │  │
-│  │  • Sets SHELL=/usr/local/bin/sentra-shell               │  │
-│  │  • Launches OpenClaw gateway                             │  │
+│  │              OpenClaw Gateway (Node.js)                  │  │
+│  │  • WhatsApp Web integration                              │  │
+│  │  • LLM API calls (OpenRouter)                           │  │
+│  │  • Email via Himalaya                                    │  │
+│  │  • SHELL=/usr/local/bin/sentra-shell                    │  │
 │  └────────────────────────┬────────────────────────────────┘  │
 │                           │                                    │
 │                           ▼                                    │
 │  ┌─────────────────────────────────────────────────────────┐  │
-│  │              OpenClaw Gateway (Node.js)                  │  │
-│  │  • WhatsApp Web integration                              │  │
-│  │  • LLM API calls (Gemini, OpenRouter)                   │  │
-│  │  • Command execution via SHELL                           │  │
-│  └────────────────────────┬────────────────────────────────┘  │
-│                           │                                    │
-│            ┌──────────────┴──────────────┐                    │
-│            ▼                             ▼                    │
-│  ┌─────────────────────┐    ┌─────────────────────────────┐  │
-│  │    sentra-shell     │    │      python_runner          │  │
-│  │  (Sentra REPL)      │    │   (Sandboxed Python)        │  │
-│  │                     │    │                             │  │
-│  │  • Policy enforce   │    │  • Namespace isolation      │  │
-│  │  • Rate limiting    │    │  • Seccomp syscall filter   │  │
-│  │  • Audit logging    │    │  • Cgroup resource limits   │  │
-│  └─────────────────────┘    └─────────────────────────────┘  │
+│  │              sentra-shell (--quiet mode)                 │  │
+│  │  • Policy-enforced command execution                     │  │
+│  │  • Rate limiting                                         │  │
+│  │  • Audit logging                                         │  │
+│  │  • Clean output (no banner noise)                        │  │
+│  └─────────────────────────────────────────────────────────┘  │
+│                                                                │
+│  Services: openclaw.service (systemd)                          │
+│  Config:   /etc/sentra/policy.yaml                            │
+│  Logs:     /var/log/sentra/audit.jsonl                        │
 │                                                                │
 └───────────────────────────────────────────────────────────────┘
 ```
@@ -63,105 +71,77 @@ Deploy a secure AI agent execution environment on **Oracle Cloud Free Tier** wit
 3. Configure networking:
    - Create VCN with public subnet
    - Allow ingress on port 22 (SSH)
-   - Allow ingress on port 18789 (OpenClaw gateway) if remote access needed
 
 4. Add your SSH public key
 
-### 2. Install Sentra Execution Firewall
+### 2. One-Line Install
 
 SSH into your VM and run:
 
 ```bash
-# One-line install
+# Install everything (Sentra, OpenClaw, Himalaya)
 curl -sSL https://raw.githubusercontent.com/sundarsub/sentra/main/scripts/install-oracle-cloud.sh | sudo bash
 ```
 
-Or step by step:
+Or with pre-configured credentials:
 
 ```bash
-# Download install script
-curl -O https://raw.githubusercontent.com/sundarsub/sentra/main/scripts/install-oracle-cloud.sh
-chmod +x install-oracle-cloud.sh
+# Set credentials as environment variables
+export OPENROUTER_API_KEY="sk-or-v1-your-key-here"
+export GMAIL_ADDRESS="your-email@gmail.com"
+export GMAIL_APP_PASSWORD="xxxx xxxx xxxx xxxx"  # Gmail app password
 
-# Review and run
-cat install-oracle-cloud.sh
-sudo ./install-oracle-cloud.sh
+# Run installer
+curl -sSL https://raw.githubusercontent.com/sundarsub/sentra/main/scripts/install-oracle-cloud.sh | sudo -E bash
 ```
 
-### 3. Install OpenClaw
+### 3. Start OpenClaw
 
 ```bash
-# Install Node.js 20 LTS
-curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-sudo dnf install -y nodejs
+# Start with Sentra (quiet mode - no banner noise)
+openclaw-start
 
-# Install OpenClaw globally
-sudo npm install -g openclaw
-
-# Verify
-openclaw --version
+# Or use systemd service
+sudo systemctl start openclaw
+sudo systemctl enable openclaw  # Start on boot
 ```
 
-### 4. Configure OpenClaw
+### 4. Link WhatsApp
+
+When OpenClaw starts, a QR code appears. Scan it with WhatsApp mobile:
+1. Open WhatsApp on your phone
+2. Go to Settings → Linked Devices
+3. Tap "Link a Device"
+4. Scan the QR code
+
+### 5. Test Email (Optional)
 
 ```bash
-# Initialize OpenClaw config
-openclaw init
-
-# Set your LLM API key (example with Gemini)
-openclaw config set llm.provider gemini
-openclaw config set llm.apiKey "YOUR_GEMINI_API_KEY"
-
-# Or use OpenRouter
-openclaw config set llm.provider openrouter
-openclaw config set llm.apiKey "YOUR_OPENROUTER_API_KEY"
+# Send a test email
+email "recipient@example.com" "Test Subject" "Hello from Sentra!"
 ```
 
-### 5. Configure WhatsApp (Optional)
+## Build from Source
+
+If pre-built binaries don't work (GLIBC issues), build from source:
 
 ```bash
-# Enable WhatsApp channel
-openclaw config set channels.whatsapp.enabled true
-
-# Start OpenClaw to get QR code
-openclaw gateway
-
-# Scan QR code with WhatsApp mobile app
-# Link as "WhatsApp Web" device
-```
-
-### 6. Launch with Execution Firewall
-
-```bash
-# Start OpenClaw with Sentra security
-openclaw_launcher \
-  --openclaw-bin /usr/bin/openclaw \
-  --seccomp-profile gateway \
-  --sentra-repl \
-  -- gateway
-```
-
-Or use the systemd service:
-
-```bash
-# Enable and start
-sudo systemctl enable --now openclaw-firewall
-
-# Check status
-sudo systemctl status openclaw-firewall
-
-# View logs
-journalctl -u openclaw-firewall -f
+export BUILD_FROM_SOURCE=1
+curl -sSL https://raw.githubusercontent.com/sundarsub/sentra/main/scripts/install-oracle-cloud.sh | sudo -E bash
 ```
 
 ## What Gets Installed
 
 | Component | Path | Description |
 |-----------|------|-------------|
-| `sentra` | `/usr/local/bin/sentra` | Execution governance REPL |
-| `openclaw_launcher` | `/usr/local/bin/openclaw_launcher` | Seccomp-locked launcher |
-| `python_runner` | `/usr/lib/sentra/python_runner` | Sandboxed Python executor |
-| `sentra-shell` | `/usr/local/bin/sentra-shell` | SHELL wrapper for REPL |
+| `sentra` | `/usr/local/bin/sentra` | Execution governance REPL (supports `--quiet`) |
+| `sentra-shell` | `/usr/local/bin/sentra-shell` | SHELL wrapper with quiet mode |
+| `email` | `/usr/local/bin/email` | Send email to any recipient |
+| `send-email` | `/usr/local/bin/send-email` | Simple email helper script |
+| `himalaya` | `/usr/local/bin/himalaya` | CLI email client (IMAP/SMTP) |
+| `openclaw` | `/usr/bin/openclaw` | AI agent gateway (npm global) |
+| `openclaw-start` | `/usr/local/bin/openclaw-start` | Start OpenClaw with Sentra |
+| `openclaw-status` | `/usr/local/bin/openclaw-status` | Check service status |
 | `policy.yaml` | `/etc/sentra/policy.yaml` | Execution policy rules |
 
 ## Security Profiles

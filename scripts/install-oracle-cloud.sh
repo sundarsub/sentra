@@ -1,25 +1,43 @@
 #!/bin/bash
-# install-oracle-cloud.sh - OpenClaw Execution Firewall installer for Oracle Cloud
+# =============================================================================
+# Sentra + OpenClaw Install Script for Oracle Cloud
+# =============================================================================
 #
-# This script installs Sentra, openclaw_launcher, python_runner, and sentra-shell
-# on Oracle Cloud Linux (Oracle Linux 9, Ubuntu 22.04, or compatible)
+# Installs a complete AI agent environment:
+#   - Sentra execution firewall (with --quiet mode)
+#   - OpenClaw AI agent gateway
+#   - Himalaya email client
+#   - WhatsApp integration
+#   - OpenRouter LLM support
+#
+# This is the STANDARD version - runs OpenClaw with Sentra REPL for command
+# governance. No seccomp launcher required.
 #
 # Usage:
 #   curl -sSL https://raw.githubusercontent.com/sundarsub/sentra/main/scripts/install-oracle-cloud.sh | sudo bash
 #
-# Environment variables:
-#   SENTRA_VERSION   - Specific version to install (default: latest)
-#   SKIP_SYSTEMD     - Set to 1 to skip systemd service creation
-#   OPENCLAW_BIN     - Path to OpenClaw binary (default: /usr/bin/openclaw)
+# Options (via environment variables):
+#   OPENROUTER_API_KEY  - Pre-configure OpenRouter API key
+#   GMAIL_ADDRESS       - Email address for himalaya
+#   GMAIL_APP_PASSWORD  - Gmail app password for himalaya
+#   BUILD_FROM_SOURCE   - Set to 1 to build Sentra from source
+#   SKIP_OPENCLAW       - Set to 1 to skip OpenClaw installation
+#   SKIP_HIMALAYA       - Set to 1 to skip Himalaya installation
+#
+# =============================================================================
 
 set -e
 
-# Colors for output
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+log() { echo -e "${GREEN}[+]${NC} $1"; }
+warn() { echo -e "${YELLOW}[!]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1" >&2; exit 1; }
 
 # Configuration
 GITHUB_REPO="sundarsub/sentra"
@@ -27,329 +45,404 @@ INSTALL_DIR="/usr/local/bin"
 LIB_DIR="/usr/lib/sentra"
 CONFIG_DIR="/etc/sentra"
 LOG_DIR="/var/log/sentra"
-OPENCLAW_BIN="${OPENCLAW_BIN:-/usr/bin/openclaw}"
 
-echo -e "${BLUE}"
+echo -e "${CYAN}"
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║     OpenClaw Execution Firewall - Oracle Cloud Installer     ║"
+echo "║        Sentra + OpenClaw - Oracle Cloud Installer            ║"
 echo "║                                                              ║"
-echo "║  Seccomp-locked AI agent sandbox with:                       ║"
-echo "║  • Policy-enforced command governance                        ║"
-echo "║  • WhatsApp/Telegram integration support                     ║"
-echo "║  • Python sandbox isolation                                  ║"
+echo "║  AI Agent Environment with:                                  ║"
+echo "║  • Policy-enforced command governance (Sentra)               ║"
+echo "║  • WhatsApp integration (OpenClaw)                           ║"
+echo "║  • Email support (Himalaya)                                  ║"
+echo "║  • OpenRouter LLM                                            ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
-# Check if running as root
+# =============================================================================
+# Check Prerequisites
+# =============================================================================
+
+log "Checking prerequisites..."
+
 if [[ $EUID -ne 0 ]]; then
-    echo -e "${RED}Error: This script must be run as root (use sudo)${NC}"
-    exit 1
+    error "This script must be run as root (use sudo)"
 fi
 
 # Detect architecture
 ARCH=$(uname -m)
 case $ARCH in
-    x86_64)
-        PLATFORM="linux-x86_64"
-        ;;
-    aarch64|arm64)
-        PLATFORM="linux-aarch64"
-        ;;
-    *)
-        echo -e "${RED}Error: Unsupported architecture: $ARCH${NC}"
-        echo "Supported: x86_64, aarch64"
-        exit 1
-        ;;
+    x86_64)  PLATFORM="linux-x86_64" ;;
+    aarch64) PLATFORM="linux-aarch64" ;;
+    arm64)   PLATFORM="linux-aarch64" ;;
+    *)       error "Unsupported architecture: $ARCH" ;;
 esac
+log "Platform: $PLATFORM"
 
-echo -e "${GREEN}→ Detected platform: $PLATFORM${NC}"
-
-# Detect OS
-if [ -f /etc/oracle-release ]; then
-    OS="oracle"
-    echo -e "${GREEN}→ Detected OS: Oracle Linux${NC}"
-elif [ -f /etc/os-release ]; then
-    . /etc/os-release
-    OS=$ID
-    echo -e "${GREEN}→ Detected OS: $NAME${NC}"
+# Detect OS and package manager
+if [[ -f /etc/oracle-release ]] || [[ -f /etc/redhat-release ]]; then
+    PKG_MGR="dnf"
+    log "Detected: Oracle Linux / RHEL"
+elif [[ -f /etc/debian_version ]]; then
+    PKG_MGR="apt-get"
+    log "Detected: Debian / Ubuntu"
 else
-    OS="unknown"
-    echo -e "${YELLOW}→ Unknown OS, proceeding anyway${NC}"
+    warn "Unknown OS, assuming dnf"
+    PKG_MGR="dnf"
 fi
 
-# Install dependencies
-echo -e "${BLUE}→ Installing dependencies...${NC}"
-case $OS in
-    oracle|rhel|centos|fedora)
-        dnf install -y curl tar gzip libseccomp || yum install -y curl tar gzip libseccomp
-        ;;
-    ubuntu|debian)
-        apt-get update
-        apt-get install -y curl tar gzip libseccomp2
-        ;;
-    *)
-        echo -e "${YELLOW}→ Unknown package manager, assuming dependencies are installed${NC}"
-        ;;
-esac
+# =============================================================================
+# Install System Dependencies
+# =============================================================================
 
-# Get latest version if not specified
-if [ -z "$SENTRA_VERSION" ]; then
-    echo -e "${BLUE}→ Fetching latest release...${NC}"
-    SENTRA_VERSION=$(curl -sSL "https://api.github.com/repos/$GITHUB_REPO/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
-    if [ -z "$SENTRA_VERSION" ]; then
-        echo -e "${RED}Error: Could not determine latest version${NC}"
-        exit 1
-    fi
+log "Installing system dependencies..."
+
+if [[ "$PKG_MGR" == "dnf" ]]; then
+    dnf install -y \
+        gcc gcc-c++ \
+        libseccomp-devel \
+        git cmake curl jq tar gzip \
+        2>/dev/null || yum install -y gcc gcc-c++ libseccomp-devel git cmake curl jq tar gzip
+else
+    apt-get update
+    apt-get install -y \
+        build-essential \
+        libseccomp-dev \
+        git cmake curl jq
 fi
 
-echo -e "${GREEN}→ Installing Sentra $SENTRA_VERSION${NC}"
+# =============================================================================
+# Install Sentra
+# =============================================================================
 
-# Download URL
-DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$SENTRA_VERSION/sentra-$PLATFORM.tar.gz"
-
-# Create temporary directory
-TMP_DIR=$(mktemp -d)
-trap "rm -rf $TMP_DIR" EXIT
-
-# Download release
-echo -e "${BLUE}→ Downloading from $DOWNLOAD_URL${NC}"
-curl -sSL "$DOWNLOAD_URL" -o "$TMP_DIR/sentra.tar.gz"
-
-# Extract
-echo -e "${BLUE}→ Extracting...${NC}"
-tar xzf "$TMP_DIR/sentra.tar.gz" -C "$TMP_DIR"
+log "Installing Sentra execution firewall..."
 
 # Create directories
-echo -e "${BLUE}→ Creating directories...${NC}"
-mkdir -p "$INSTALL_DIR"
-mkdir -p "$LIB_DIR"
-mkdir -p "$CONFIG_DIR"
-mkdir -p "$LOG_DIR"
+mkdir -p "$INSTALL_DIR" "$LIB_DIR" "$CONFIG_DIR" "$LOG_DIR"
 chmod 755 "$LOG_DIR"
 
-# Install binaries
-echo -e "${BLUE}→ Installing binaries...${NC}"
+if [[ "$BUILD_FROM_SOURCE" == "1" ]]; then
+    # Build from source
+    log "Building from source..."
 
-# Find and install sentra
-if [ -f "$TMP_DIR/sentra" ]; then
-    cp "$TMP_DIR/sentra" "$INSTALL_DIR/sentra"
-    chmod 755 "$INSTALL_DIR/sentra"
-    echo -e "${GREEN}  ✓ Installed sentra${NC}"
-else
-    echo -e "${RED}  ✗ sentra binary not found in release${NC}"
-    exit 1
-fi
-
-# Find and install openclaw_launcher
-if [ -f "$TMP_DIR/openclaw_launcher" ]; then
-    cp "$TMP_DIR/openclaw_launcher" "$INSTALL_DIR/openclaw_launcher"
-    chmod 755 "$INSTALL_DIR/openclaw_launcher"
-    echo -e "${GREEN}  ✓ Installed openclaw_launcher${NC}"
-else
-    echo -e "${YELLOW}  → openclaw_launcher not found, skipping${NC}"
-fi
-
-# Find and install python_runner
-if [ -f "$TMP_DIR/python_runner" ]; then
-    cp "$TMP_DIR/python_runner" "$LIB_DIR/python_runner"
-    chmod 755 "$LIB_DIR/python_runner"
-    echo -e "${GREEN}  ✓ Installed python_runner${NC}"
-else
-    echo -e "${YELLOW}  → python_runner not found, skipping${NC}"
-fi
-
-# Install sentra-shell wrapper
-echo -e "${BLUE}→ Installing sentra-shell...${NC}"
-cat > "$INSTALL_DIR/sentra-shell" << 'SHELL_EOF'
-#!/bin/bash
-# sentra-shell - Sentra REPL wrapper for OpenClaw
-#
-# This script is used as SHELL by OpenClaw to route all command execution
-# through Sentra's policy enforcement.
-
-set -e
-
-SENTRA_BIN="${SENTRA_BIN:-/usr/local/bin/sentra}"
-POLICY_FILE="${SENTRA_POLICY:-/etc/sentra/policy.yaml}"
-PYTHON_RUNNER="${PYTHON_RUNNER:-/usr/lib/sentra/python_runner}"
-
-# Check if Sentra exists
-if [[ ! -x "$SENTRA_BIN" ]]; then
-    echo "sentra-shell: ERROR: Sentra not found at $SENTRA_BIN" >&2
-    exit 127
-fi
-
-# Build Sentra arguments
-SENTRA_ARGS=()
-if [[ -f "$POLICY_FILE" ]]; then
-    SENTRA_ARGS+=("--policy" "$POLICY_FILE")
-fi
-if [[ -x "$PYTHON_RUNNER" ]]; then
-    SENTRA_ARGS+=("--python-runner" "$PYTHON_RUNNER")
-fi
-
-# Handle different invocation modes
-case "$1" in
-    -c)
-        # sh -c compatible mode: execute command string
-        shift
-        if [[ -z "$1" ]]; then
-            echo "sentra-shell: -c requires a command string" >&2
-            exit 1
-        fi
-        echo "$*" | "$SENTRA_BIN" "${SENTRA_ARGS[@]}" 2>&1
-        exit ${PIPESTATUS[1]}
-        ;;
-    -i)
-        # Interactive mode
-        shift
-        exec "$SENTRA_BIN" "${SENTRA_ARGS[@]}" "$@"
-        ;;
-    "")
-        # No arguments: interactive REPL
-        exec "$SENTRA_BIN" "${SENTRA_ARGS[@]}"
-        ;;
-    *)
-        # Script file or command
-        if [[ -f "$1" ]]; then
-            cat "$1" | "$SENTRA_BIN" "${SENTRA_ARGS[@]}" 2>&1
-            exit ${PIPESTATUS[1]}
-        else
-            echo "$*" | "$SENTRA_BIN" "${SENTRA_ARGS[@]}" 2>&1
-            exit ${PIPESTATUS[1]}
-        fi
-        ;;
-esac
-SHELL_EOF
-chmod 755 "$INSTALL_DIR/sentra-shell"
-echo -e "${GREEN}  ✓ Installed sentra-shell${NC}"
-
-# Install default policy if not exists
-if [ ! -f "$CONFIG_DIR/policy.yaml" ]; then
-    echo -e "${BLUE}→ Installing default policy...${NC}"
-    if [ -f "$TMP_DIR/policy.yaml" ]; then
-        cp "$TMP_DIR/policy.yaml" "$CONFIG_DIR/policy.yaml"
-    else
-        # Download policy from repo
-        curl -sSL "https://raw.githubusercontent.com/$GITHUB_REPO/main/policy.yaml" -o "$CONFIG_DIR/policy.yaml"
+    # Install Rust if needed
+    if ! command -v cargo &> /dev/null; then
+        log "Installing Rust..."
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        source "$HOME/.cargo/env"
     fi
-    chmod 644 "$CONFIG_DIR/policy.yaml"
-    echo -e "${GREEN}  ✓ Installed policy.yaml${NC}"
+    export PATH="$HOME/.cargo/bin:$PATH"
+
+    # Clone and build
+    SENTRA_REPO="/tmp/sentra-build"
+    rm -rf "$SENTRA_REPO"
+    git clone "https://github.com/$GITHUB_REPO.git" "$SENTRA_REPO"
+    cd "$SENTRA_REPO"
+    cargo build --release
+
+    # Install binaries
+    install -m 755 target/release/sentra "$INSTALL_DIR/"
+    install -m 755 target/release/python_runner "$LIB_DIR/" 2>/dev/null || true
+    install -m 755 target/release/openclaw_launcher "$INSTALL_DIR/" 2>/dev/null || true
+
+    # Install scripts and policy
+    install -m 755 scripts/sentra-shell "$INSTALL_DIR/"
+    install -m 755 scripts/email "$INSTALL_DIR/"
+    install -m 755 scripts/send-email "$INSTALL_DIR/"
+    cp policy.yaml "$CONFIG_DIR/"
+
+    cd /
+    rm -rf "$SENTRA_REPO"
 else
-    echo -e "${YELLOW}  → policy.yaml exists, not overwriting${NC}"
+    # Download pre-built release
+    log "Downloading pre-built release..."
+
+    # Get latest version
+    SENTRA_VERSION=$(curl -sSL "https://api.github.com/repos/$GITHUB_REPO/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+    [[ -z "$SENTRA_VERSION" ]] && error "Could not determine latest version"
+    log "Version: $SENTRA_VERSION"
+
+    DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$SENTRA_VERSION/sentra-$PLATFORM.tar.gz"
+    TMP_DIR=$(mktemp -d)
+    trap "rm -rf $TMP_DIR" EXIT
+
+    curl -sSL "$DOWNLOAD_URL" -o "$TMP_DIR/sentra.tar.gz"
+    tar xzf "$TMP_DIR/sentra.tar.gz" -C "$TMP_DIR"
+
+    # Install binaries
+    [[ -f "$TMP_DIR/sentra" ]] && install -m 755 "$TMP_DIR/sentra" "$INSTALL_DIR/"
+    [[ -f "$TMP_DIR/python_runner" ]] && install -m 755 "$TMP_DIR/python_runner" "$LIB_DIR/"
+    [[ -f "$TMP_DIR/openclaw_launcher" ]] && install -m 755 "$TMP_DIR/openclaw_launcher" "$INSTALL_DIR/"
+
+    # Download scripts from repo
+    curl -sSL "https://raw.githubusercontent.com/$GITHUB_REPO/main/scripts/sentra-shell" -o "$INSTALL_DIR/sentra-shell"
+    curl -sSL "https://raw.githubusercontent.com/$GITHUB_REPO/main/scripts/email" -o "$INSTALL_DIR/email"
+    curl -sSL "https://raw.githubusercontent.com/$GITHUB_REPO/main/scripts/send-email" -o "$INSTALL_DIR/send-email"
+    chmod 755 "$INSTALL_DIR/sentra-shell" "$INSTALL_DIR/email" "$INSTALL_DIR/send-email"
+
+    # Download policy
+    [[ ! -f "$CONFIG_DIR/policy.yaml" ]] && \
+        curl -sSL "https://raw.githubusercontent.com/$GITHUB_REPO/main/policy.yaml" -o "$CONFIG_DIR/policy.yaml"
 fi
 
-# Create systemd service
-if [ "$SKIP_SYSTEMD" != "1" ] && command -v systemctl &> /dev/null; then
-    echo -e "${BLUE}→ Creating systemd service...${NC}"
+log "Sentra installed: $($INSTALL_DIR/sentra --version 2>/dev/null || echo 'OK')"
 
-    cat > /etc/systemd/system/openclaw-firewall.service << EOF
+# =============================================================================
+# Install Node.js and OpenClaw
+# =============================================================================
+
+if [[ "$SKIP_OPENCLAW" != "1" ]]; then
+    log "Installing Node.js and OpenClaw..."
+
+    if ! command -v node &> /dev/null; then
+        if [[ "$PKG_MGR" == "dnf" ]]; then
+            curl -fsSL https://rpm.nodesource.com/setup_22.x | bash -
+            dnf install -y nodejs
+        else
+            curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+            apt-get install -y nodejs
+        fi
+    fi
+    log "Node.js: $(node --version)"
+
+    npm install -g openclaw 2>/dev/null || warn "OpenClaw install had warnings"
+    log "OpenClaw: $(openclaw --version 2>/dev/null || echo 'installed')"
+fi
+
+# =============================================================================
+# Install Himalaya (Email Client)
+# =============================================================================
+
+if [[ "$SKIP_HIMALAYA" != "1" ]]; then
+    log "Installing Himalaya email client..."
+
+    if ! command -v himalaya &> /dev/null; then
+        # Install Rust if needed
+        if ! command -v cargo &> /dev/null; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            source "$HOME/.cargo/env"
+        fi
+        export PATH="$HOME/.cargo/bin:$PATH"
+
+        cargo install himalaya
+        cp "$HOME/.cargo/bin/himalaya" "$INSTALL_DIR/" 2>/dev/null || true
+    fi
+    log "Himalaya: $(himalaya --version 2>/dev/null || echo 'installed')"
+fi
+
+# =============================================================================
+# Configure OpenClaw for OpenRouter
+# =============================================================================
+
+# Determine user home directory
+if [[ -n "$SUDO_USER" ]]; then
+    USER_HOME=$(eval echo ~$SUDO_USER)
+    OWNER="$SUDO_USER"
+else
+    USER_HOME="/home/opc"
+    OWNER="opc"
+fi
+
+OPENCLAW_HOME="$USER_HOME/.openclaw"
+mkdir -p "$OPENCLAW_HOME/agents/main/agent"
+
+if [[ -n "$OPENROUTER_API_KEY" ]]; then
+    log "Configuring OpenRouter..."
+
+    cat > "$OPENCLAW_HOME/agents/main/agent/auth-profiles.json" << EOF
+{
+  "providers": {
+    "openrouter": {
+      "apiKey": "$OPENROUTER_API_KEY"
+    }
+  },
+  "activeProfile": "openrouter"
+}
+EOF
+fi
+
+# Create main OpenClaw config
+if [[ ! -f "$OPENCLAW_HOME/openclaw.json" ]]; then
+    cat > "$OPENCLAW_HOME/openclaw.json" << 'EOF'
+{
+  "agents": {
+    "defaults": {
+      "model": "openrouter/anthropic/claude-3.5-sonnet",
+      "workspace": "~/.openclaw/workspace"
+    }
+  },
+  "channels": {
+    "whatsapp": {
+      "enabled": true,
+      "dmPolicy": "allowlist"
+    }
+  }
+}
+EOF
+fi
+
+chown -R "$OWNER:$OWNER" "$OPENCLAW_HOME" 2>/dev/null || true
+
+# =============================================================================
+# Configure Himalaya (Email)
+# =============================================================================
+
+if [[ -n "$GMAIL_ADDRESS" ]] && [[ -n "$GMAIL_APP_PASSWORD" ]]; then
+    log "Configuring Himalaya email..."
+
+    HIMALAYA_CONFIG="$USER_HOME/.config/himalaya"
+    mkdir -p "$HIMALAYA_CONFIG"
+
+    cat > "$HIMALAYA_CONFIG/config.toml" << EOF
+[accounts.gmail]
+default = true
+email = "$GMAIL_ADDRESS"
+display-name = "Sentra"
+folder.alias.sent = "[Gmail]/Sent Mail"
+folder.alias.drafts = "[Gmail]/Drafts"
+
+[accounts.gmail.backend]
+type = "imap"
+host = "imap.gmail.com"
+port = 993
+login = "$GMAIL_ADDRESS"
+
+[accounts.gmail.backend.encryption]
+type = "tls"
+
+[accounts.gmail.backend.auth]
+type = "password"
+raw = "$GMAIL_APP_PASSWORD"
+
+[accounts.gmail.message.send.backend]
+type = "smtp"
+host = "smtp.gmail.com"
+port = 465
+login = "$GMAIL_ADDRESS"
+
+[accounts.gmail.message.send.backend.encryption]
+type = "tls"
+
+[accounts.gmail.message.send.backend.auth]
+type = "password"
+raw = "$GMAIL_APP_PASSWORD"
+
+[accounts.gmail.message.send]
+save-copy = false
+EOF
+
+    chown -R "$OWNER:$OWNER" "$HIMALAYA_CONFIG" 2>/dev/null || true
+    chmod 600 "$HIMALAYA_CONFIG/config.toml"
+fi
+
+# =============================================================================
+# Create Systemd Service (non-seccomp version)
+# =============================================================================
+
+log "Creating systemd service..."
+
+cat > /etc/systemd/system/openclaw.service << EOF
 [Unit]
-Description=OpenClaw Execution Firewall
-Documentation=https://github.com/sundarsub/sentra
+Description=OpenClaw AI Agent Gateway with Sentra
 After=network.target
 
 [Service]
 Type=simple
-User=opc
-Group=opc
-ExecStart=$INSTALL_DIR/openclaw_launcher \\
-    --openclaw-bin $OPENCLAW_BIN \\
-    --seccomp-profile gateway \\
-    --sentra-repl \\
-    -- gateway
-Restart=on-failure
+User=$OWNER
+Environment=SHELL=/usr/local/bin/sentra-shell
+Environment=SENTRA_QUIET=1
+Environment=HOME=$USER_HOME
+WorkingDirectory=$USER_HOME
+ExecStart=/usr/bin/openclaw gateway
+Restart=always
 RestartSec=10
-StandardOutput=journal
-StandardError=journal
-
-# Security hardening
-NoNewPrivileges=false
-ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=/tmp /var/log/sentra
-PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-    systemctl daemon-reload
-    echo -e "${GREEN}  ✓ Created openclaw-firewall.service${NC}"
-    echo -e "${YELLOW}  → Run 'systemctl enable --now openclaw-firewall' to start${NC}"
+systemctl daemon-reload
+log "Created openclaw.service"
+
+# =============================================================================
+# Create Helper Scripts
+# =============================================================================
+
+log "Creating helper scripts..."
+
+cat > "$INSTALL_DIR/openclaw-start" << 'EOF'
+#!/bin/bash
+# Start OpenClaw with Sentra shell wrapper (quiet mode)
+export SHELL=/usr/local/bin/sentra-shell
+export SENTRA_QUIET=1
+exec openclaw gateway "$@"
+EOF
+chmod +x "$INSTALL_DIR/openclaw-start"
+
+cat > "$INSTALL_DIR/openclaw-status" << 'EOF'
+#!/bin/bash
+echo "=== OpenClaw Processes ==="
+pgrep -a openclaw || echo "Not running"
+echo ""
+echo "=== Sentra Version ==="
+sentra --version 2>/dev/null || echo "Not found"
+echo ""
+echo "=== Service Status ==="
+systemctl is-active openclaw 2>/dev/null || echo "Service not running"
+EOF
+chmod +x "$INSTALL_DIR/openclaw-status"
+
+# =============================================================================
+# Fix Permissions
+# =============================================================================
+
+chown -R "$OWNER:$OWNER" "$LOG_DIR" 2>/dev/null || true
+
+# =============================================================================
+# Summary
+# =============================================================================
+
+echo ""
+echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+echo -e "${CYAN}                  Installation Complete!                        ${NC}"
+echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
+echo ""
+echo -e "${GREEN}Installed Components:${NC}"
+echo "  • Sentra:       $($INSTALL_DIR/sentra --version 2>/dev/null || echo 'installed')"
+echo "  • OpenClaw:     $(openclaw --version 2>/dev/null || echo 'installed')"
+echo "  • Himalaya:     $(himalaya --version 2>/dev/null || echo 'installed')"
+echo "  • Node.js:      $(node --version 2>/dev/null || echo 'installed')"
+echo ""
+echo -e "${GREEN}Installed Files:${NC}"
+echo "  • $INSTALL_DIR/sentra"
+echo "  • $INSTALL_DIR/sentra-shell"
+echo "  • $INSTALL_DIR/email"
+echo "  • $INSTALL_DIR/send-email"
+echo "  • $CONFIG_DIR/policy.yaml"
+echo ""
+echo -e "${YELLOW}Next Steps:${NC}"
+echo ""
+if [[ -z "$OPENROUTER_API_KEY" ]]; then
+    echo "  1. Configure OpenRouter API key:"
+    echo "     Edit $OPENCLAW_HOME/agents/main/agent/auth-profiles.json"
+    echo ""
 fi
-
-# Verify installation
-echo ""
-echo -e "${BLUE}→ Verifying installation...${NC}"
-
-if [ -x "$INSTALL_DIR/sentra" ]; then
-    VERSION=$("$INSTALL_DIR/sentra" --version 2>&1 || echo "")
-    if echo "$VERSION" | grep -q "GLIBC"; then
-        echo -e "${YELLOW}  → sentra: Binary requires newer GLIBC${NC}"
-        echo -e "${YELLOW}    To fix, build from source:${NC}"
-        echo -e "${YELLOW}    curl https://sh.rustup.rs -sSf | sh${NC}"
-        echo -e "${YELLOW}    git clone https://github.com/sundarsub/sentra.git${NC}"
-        echo -e "${YELLOW}    cd sentra && cargo build --release${NC}"
-        echo -e "${YELLOW}    sudo cp target/release/{sentra,openclaw_launcher,python_runner} /usr/local/bin/${NC}"
-    elif [ -n "$VERSION" ]; then
-        echo -e "${GREEN}  ✓ sentra: $VERSION${NC}"
-    else
-        echo -e "${GREEN}  ✓ sentra: installed${NC}"
-    fi
-else
-    echo -e "${RED}  ✗ sentra not found${NC}"
+if [[ -z "$GMAIL_ADDRESS" ]]; then
+    echo "  2. Configure email (optional):"
+    echo "     himalaya account configure"
+    echo ""
 fi
-
-if [ -x "$INSTALL_DIR/openclaw_launcher" ]; then
-    echo -e "${GREEN}  ✓ openclaw_launcher: installed${NC}"
-fi
-
-if [ -x "$LIB_DIR/python_runner" ]; then
-    echo -e "${GREEN}  ✓ python_runner: installed${NC}"
-fi
-
-if [ -x "$INSTALL_DIR/sentra-shell" ]; then
-    echo -e "${GREEN}  ✓ sentra-shell: installed${NC}"
-fi
-
-if [ -f "$CONFIG_DIR/policy.yaml" ]; then
-    echo -e "${GREEN}  ✓ policy.yaml: installed${NC}"
-fi
-
-# Show available seccomp profiles
+echo "  3. Start OpenClaw:"
+echo "     openclaw-start"
+echo "     # Or: sudo systemctl start openclaw"
 echo ""
-echo -e "${BLUE}→ Available seccomp profiles:${NC}"
-"$INSTALL_DIR/openclaw_launcher" --list-profiles 2>/dev/null | head -20 || echo "  (run openclaw_launcher --list-profiles to see)"
-
-# Print summary
+echo "  4. Link WhatsApp:"
+echo "     Scan QR code shown in terminal"
 echo ""
-echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║              Installation Complete!                          ║${NC}"
-echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
+echo -e "${GREEN}Commands:${NC}"
+echo "  • openclaw-start          - Start OpenClaw with Sentra"
+echo "  • openclaw-status         - Check status"
+echo "  • email <to> <subj> <body> - Send email"
+echo "  • sentra --quiet          - Policy shell (quiet mode)"
 echo ""
-echo -e "Installed components:"
-echo -e "  • sentra           → $INSTALL_DIR/sentra"
-echo -e "  • openclaw_launcher → $INSTALL_DIR/openclaw_launcher"
-echo -e "  • python_runner    → $LIB_DIR/python_runner"
-echo -e "  • sentra-shell     → $INSTALL_DIR/sentra-shell"
-echo -e "  • policy.yaml      → $CONFIG_DIR/policy.yaml"
+echo -e "${CYAN}Documentation: https://github.com/$GITHUB_REPO/blob/main/docs/ORACLE_CLOUD_DEPLOYMENT.md${NC}"
 echo ""
-echo -e "${YELLOW}Next steps:${NC}"
-echo ""
-echo "1. Install OpenClaw (if not already installed):"
-echo "   curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -"
-echo "   sudo dnf install -y nodejs"
-echo "   sudo npm install -g openclaw"
-echo ""
-echo "2. Configure your LLM API key:"
-echo "   openclaw config set llm.provider gemini"
-echo "   openclaw config set llm.apiKey 'YOUR_API_KEY'"
-echo ""
-echo "3. Start OpenClaw with execution firewall:"
-echo "   openclaw_launcher --openclaw-bin /usr/bin/openclaw -- gateway"
-echo ""
-echo "   Or use systemd:"
-echo "   sudo systemctl enable --now openclaw-firewall"
-echo ""
-echo -e "Documentation: ${BLUE}https://github.com/sundarsub/sentra/blob/main/docs/ORACLE_CLOUD_DEPLOYMENT.md${NC}"
