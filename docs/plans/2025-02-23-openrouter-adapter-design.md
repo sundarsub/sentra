@@ -2,7 +2,7 @@
 
 ## Overview
 
-A Python FastAPI adapter that proxies requests to OpenRouter with budget-based model selection. Reads cost policies from `policy.yaml` (integrated with Sentra config), tracks spend locally, and exposes APIs for future JetPatch console integration.
+A Python FastAPI adapter that proxies requests to OpenRouter with budget-based model selection. Reads cost policies from `policy.yaml` (integrated with Execwall config), tracks spend locally, and exposes APIs for future JetPatch console integration.
 
 ```
 ┌──────────────┐     ┌─────────────┐     ┌────────────┐
@@ -21,7 +21,7 @@ A Python FastAPI adapter that proxies requests to OpenRouter with budget-based m
 ## File Structure
 
 ```
-sentra-install/
+execwall-install/
 ├── adapter/
 │   ├── __init__.py
 │   ├── main.py              # FastAPI app, routes
@@ -30,7 +30,7 @@ sentra-install/
 │   ├── spend.py             # Spend tracking, persistence
 │   ├── mock_openrouter.py   # Mock server for testing
 │   └── requirements.txt     # Dependencies
-├── policy.yaml              # Sentra config with cost_routing section
+├── policy.yaml              # Execwall config with cost_routing section
 ├── tests/
 │   └── test_adapter.py      # Adapter integration tests
 └── spend.jsonl              # Append-only spend log (generated)
@@ -300,7 +300,7 @@ from config import load_config
 from router import select_models, is_budget_exhausted
 from spend import SpendTracker
 
-app = FastAPI(title="Sentra OpenRouter Adapter")
+app = FastAPI(title="Execwall OpenRouter Adapter")
 
 # Load configuration
 config = load_config()
@@ -382,8 +382,8 @@ async def chat_completions(
             json=body,
             headers={
                 "Authorization": f"Bearer {config.openrouter.api_key}",
-                "HTTP-Referer": "https://sentra.dev",
-                "X-Title": "Sentra Adapter"
+                "HTTP-Referer": "https://execwall.dev",
+                "X-Title": "Execwall Adapter"
             }
         )
 
@@ -414,7 +414,7 @@ async def chat_completions(
         )
 
     # Add spend info to response metadata
-    result["_sentra"] = {
+    result["_execwall"] = {
         "agent_id": agent_id,
         "cost": cost,
         "budget_remaining": agent.budget_total - agent.budget_spent - cost,
@@ -585,7 +585,7 @@ os.unlink(spend_log)
 
 ```bash
 # Start server in background
-cd /path/to/sentra-install
+cd /path/to/execwall-install
 python -m adapter.main &
 SERVER_PID=$!
 sleep 2
@@ -687,7 +687,7 @@ curl -s -X POST http://localhost:8080/v1/chat/completions \
 #   "model": "anthropic/claude-3.5-sonnet",  <- or other from tier
 #   "choices": [...],
 #   "usage": { "total_tokens": ..., "cost": ... },
-#   "_sentra": {
+#   "_execwall": {
 #     "agent_id": "agent-1",
 #     "cost": 0.00X,
 #     "budget_remaining": 49.99X,
@@ -764,11 +764,11 @@ async def test_degradation():
             )
             data = resp.json()
 
-            sentra = data.get("_sentra", {})
+            execwall = data.get("_execwall", {})
             print(f"Request {i+1}:")
             print(f"  Model used: {data.get('model')}")
-            print(f"  Budget remaining: ${sentra.get('budget_remaining', 0):.4f}")
-            print(f"  Models allowed: {sentra.get('models_allowed', [])}")
+            print(f"  Budget remaining: ${execwall.get('budget_remaining', 0):.4f}")
+            print(f"  Models allowed: {execwall.get('models_allowed', [])}")
             print()
 
 asyncio.run(test_degradation())
@@ -1011,8 +1011,8 @@ cost_routing:
 
         assert resp.status_code == 200
         data = resp.json()
-        assert "_sentra" in data
-        assert data["_sentra"]["agent_id"] == "test-agent"
+        assert "_execwall" in data
+        assert data["_execwall"]["agent_id"] == "test-agent"
 
     def test_budget_exhausted(self, client):
         # First, exhaust the budget via update
@@ -1035,7 +1035,7 @@ cost_routing:
 ## Run All Tests
 
 ```bash
-cd /path/to/sentra-install
+cd /path/to/execwall-install
 
 # Install test dependencies
 pip install pytest pytest-asyncio httpx

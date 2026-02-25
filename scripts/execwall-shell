@@ -1,0 +1,107 @@
+#!/bin/bash
+# execwall-shell - Execwall REPL wrapper for OpenClaw
+#
+# This script is used as SHELL by OpenClaw to route all command execution
+# through Execwall's policy enforcement. Commands are validated against the
+# policy.yaml rules before execution.
+#
+# Usage:
+#   execwall-shell                    # Interactive REPL mode
+#   execwall-shell -c "command"       # Execute single command (sh -c compatible)
+#   execwall-shell script.sh          # Execute script file
+#
+# Environment variables:
+#   EXECWALL_BIN       - Path to Execwall binary (default: /usr/local/bin/execwall)
+#   EXECWALL_POLICY    - Path to policy.yaml (default: /etc/execwall/policy.yaml)
+#   PYTHON_RUNNER      - Path to python_runner (default: /usr/lib/execwall/python_runner)
+#   EXECWALL_QUIET     - Set to 1 to suppress Execwall banner/status output (default: 1)
+#   EXECWALL_VERBOSE   - Set to 1 for verbose output
+
+# Prevent recursion - execwall must use real shell, not execwall-shell
+export SHELL=/bin/bash
+
+EXECWALL_BIN="${EXECWALL_BIN:-/usr/local/bin/execwall}"
+POLICY_FILE="${EXECWALL_POLICY:-/etc/execwall/policy.yaml}"
+PYTHON_RUNNER="${PYTHON_RUNNER:-/usr/lib/execwall/python_runner}"
+QUIET="${EXECWALL_QUIET:-1}"
+
+# Build base args (quiet mode uses native --quiet flag)
+QUIET_ARG=""
+if [[ "$QUIET" = "1" ]]; then
+    QUIET_ARG="--quiet"
+fi
+
+# Check if Execwall exists
+if [[ ! -x "$EXECWALL_BIN" ]]; then
+    echo "execwall-shell: ERROR: Execwall not found at $EXECWALL_BIN" >&2
+    echo "execwall-shell: Install Execwall or set EXECWALL_BIN environment variable" >&2
+    exit 127
+fi
+
+# Check if policy exists
+if [[ ! -f "$POLICY_FILE" ]]; then
+    echo "execwall-shell: WARNING: Policy file not found at $POLICY_FILE" >&2
+    echo "execwall-shell: Commands will use default (restrictive) policy" >&2
+fi
+
+# Build Execwall arguments
+EXECWALL_ARGS=()
+if [[ -f "$POLICY_FILE" ]]; then
+    EXECWALL_ARGS+=("--policy" "$POLICY_FILE")
+fi
+if [[ -x "$PYTHON_RUNNER" ]]; then
+    EXECWALL_ARGS+=("--python-runner" "$PYTHON_RUNNER")
+fi
+
+# Handle different invocation modes
+case "$1" in
+    -c)
+        # sh -c compatible mode: execute command string
+        shift
+        if [[ -z "$1" ]]; then
+            echo "execwall-shell: -c requires a command string" >&2
+            exit 1
+        fi
+
+        # Pass command to Execwall REPL via stdin
+        if [[ -n "$EXECWALL_VERBOSE" ]]; then
+            echo "execwall-shell: executing: $*" >&2
+        fi
+
+        echo "$*" | "$EXECWALL_BIN" $QUIET_ARG "${EXECWALL_ARGS[@]}" 2>&1
+        ;;
+
+    -i)
+        # Interactive mode (explicit)
+        shift
+        exec "$EXECWALL_BIN" "${EXECWALL_ARGS[@]}" "$@"
+        ;;
+
+    "")
+        # No arguments: interactive REPL
+        exec "$EXECWALL_BIN" "${EXECWALL_ARGS[@]}"
+        ;;
+
+    *)
+        # Script file or command
+        if [[ -f "$1" ]]; then
+            # Execute script file through Execwall
+            SCRIPT="$1"
+            shift
+
+            if [[ -n "$EXECWALL_VERBOSE" ]]; then
+                echo "execwall-shell: executing script: $SCRIPT" >&2
+            fi
+
+            # Read script and pipe to Execwall
+            cat "$SCRIPT" | "$EXECWALL_BIN" $QUIET_ARG "${EXECWALL_ARGS[@]}" 2>&1
+        else
+            # Treat as command string (fallback)
+            if [[ -n "$EXECWALL_VERBOSE" ]]; then
+                echo "execwall-shell: executing: $*" >&2
+            fi
+
+            echo "$*" | "$EXECWALL_BIN" $QUIET_ARG "${EXECWALL_ARGS[@]}" 2>&1
+        fi
+        ;;
+esac

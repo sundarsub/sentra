@@ -4,7 +4,7 @@
 //! On macOS, tests expect the non-sandboxed fallback behavior.
 //! On Linux, tests verify full sandboxing with cgroups and namespaces.
 
-use sentra::sandbox::{SandboxExecutor, SandboxRequest};
+use execwall::sandbox::{SandboxExecutor, SandboxRequest};
 use std::collections::HashMap;
 
 /// Helper to create a basic request with the given code
@@ -57,7 +57,7 @@ fn make_request_with_pid_limit(code: &str, pids_max: u32) -> SandboxRequest {
 
 /// Create an executor for testing
 fn create_executor() -> SandboxExecutor {
-    SandboxExecutor::new("/usr/lib/sentra/python_runner")
+    SandboxExecutor::new("/usr/lib/execwall/python_runner")
 }
 
 // =============================================================================

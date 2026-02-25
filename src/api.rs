@@ -1,4 +1,4 @@
-//! JSON API mode for Sentra
+//! JSON API mode for Execwall
 //!
 //! Provides a TCP server that accepts JSON requests for sandbox execution.
 
@@ -103,7 +103,7 @@ impl ApiServer {
         let addr = format!("127.0.0.1:{}", self.port);
         let listener = TcpListener::bind(&addr).await?;
 
-        println!("Sentra API server listening on {}", addr);
+        println!("Execwall API server listening on {}", addr);
         println!("Send JSON requests with format: {{\"code\": \"...\", \"profile\": \"python_sandbox\"}}");
         println!("Press Ctrl+C to stop the server");
 
@@ -256,7 +256,7 @@ mod tests {
     #[test]
     fn test_process_request_empty_code() {
         let json = r#"{"code": ""}"#;
-        let result = process_request(json, "/usr/lib/sentra/python_runner");
+        let result = process_request(json, "/usr/lib/execwall/python_runner");
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(err.code, "EMPTY_CODE");
@@ -265,7 +265,7 @@ mod tests {
     #[test]
     fn test_process_request_invalid_json() {
         let json = "not valid json";
-        let result = process_request(json, "/usr/lib/sentra/python_runner");
+        let result = process_request(json, "/usr/lib/execwall/python_runner");
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(err.code, "INVALID_JSON");

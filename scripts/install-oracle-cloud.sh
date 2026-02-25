@@ -1,26 +1,26 @@
 #!/bin/bash
 # =============================================================================
-# Sentra + OpenClaw Install Script for Oracle Cloud
+# Execwall + OpenClaw Install Script for Oracle Cloud
 # =============================================================================
 #
 # Installs a complete AI agent environment:
-#   - Sentra execution firewall (with --quiet mode)
+#   - Execwall execution firewall (with --quiet mode)
 #   - OpenClaw AI agent gateway
 #   - Himalaya email client
 #   - WhatsApp integration
 #   - OpenRouter LLM support
 #
-# This is the STANDARD version - runs OpenClaw with Sentra REPL for command
+# This is the STANDARD version - runs OpenClaw with Execwall REPL for command
 # governance. No seccomp launcher required.
 #
 # Usage:
-#   curl -sSL https://raw.githubusercontent.com/sundarsub/sentra/main/scripts/install-oracle-cloud.sh | sudo bash
+#   curl -sSL https://raw.githubusercontent.com/sundarsub/execwall/main/scripts/install-oracle-cloud.sh | sudo bash
 #
 # Options (via environment variables):
 #   OPENROUTER_API_KEY  - Pre-configure OpenRouter API key
 #   GMAIL_ADDRESS       - Email address for himalaya
 #   GMAIL_APP_PASSWORD  - Gmail app password for himalaya
-#   BUILD_FROM_SOURCE   - Set to 1 to build Sentra from source
+#   BUILD_FROM_SOURCE   - Set to 1 to build Execwall from source
 #   SKIP_OPENCLAW       - Set to 1 to skip OpenClaw installation
 #   SKIP_HIMALAYA       - Set to 1 to skip Himalaya installation
 #
@@ -40,18 +40,18 @@ warn() { echo -e "${YELLOW}[!]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1" >&2; exit 1; }
 
 # Configuration
-GITHUB_REPO="sundarsub/sentra"
+GITHUB_REPO="sundarsub/execwall"
 INSTALL_DIR="/usr/local/bin"
-LIB_DIR="/usr/lib/sentra"
-CONFIG_DIR="/etc/sentra"
-LOG_DIR="/var/log/sentra"
+LIB_DIR="/usr/lib/execwall"
+CONFIG_DIR="/etc/execwall"
+LOG_DIR="/var/log/execwall"
 
 echo -e "${CYAN}"
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║        Sentra + OpenClaw - Oracle Cloud Installer            ║"
+echo "║        Execwall + OpenClaw - Oracle Cloud Installer            ║"
 echo "║                                                              ║"
 echo "║  AI Agent Environment with:                                  ║"
-echo "║  • Policy-enforced command governance (Sentra)               ║"
+echo "║  • Policy-enforced command governance (Execwall)               ║"
 echo "║  • WhatsApp integration (OpenClaw)                           ║"
 echo "║  • Email support (Himalaya)                                  ║"
 echo "║  • OpenRouter LLM                                            ║"
@@ -111,10 +111,10 @@ else
 fi
 
 # =============================================================================
-# Install Sentra
+# Install Execwall
 # =============================================================================
 
-log "Installing Sentra execution firewall..."
+log "Installing Execwall execution firewall..."
 
 # Create directories
 mkdir -p "$INSTALL_DIR" "$LIB_DIR" "$CONFIG_DIR" "$LOG_DIR"
@@ -133,58 +133,58 @@ if [[ "$BUILD_FROM_SOURCE" == "1" ]]; then
     export PATH="$HOME/.cargo/bin:$PATH"
 
     # Clone and build
-    SENTRA_REPO="/tmp/sentra-build"
-    rm -rf "$SENTRA_REPO"
-    git clone "https://github.com/$GITHUB_REPO.git" "$SENTRA_REPO"
-    cd "$SENTRA_REPO"
+    EXECWALL_REPO="/tmp/execwall-build"
+    rm -rf "$EXECWALL_REPO"
+    git clone "https://github.com/$GITHUB_REPO.git" "$EXECWALL_REPO"
+    cd "$EXECWALL_REPO"
     cargo build --release
 
     # Install binaries
-    install -m 755 target/release/sentra "$INSTALL_DIR/"
+    install -m 755 target/release/execwall "$INSTALL_DIR/"
     install -m 755 target/release/python_runner "$LIB_DIR/" 2>/dev/null || true
     install -m 755 target/release/openclaw_launcher "$INSTALL_DIR/" 2>/dev/null || true
 
     # Install scripts and policy
-    install -m 755 scripts/sentra-shell "$INSTALL_DIR/"
+    install -m 755 scripts/execwall-shell "$INSTALL_DIR/"
     install -m 755 scripts/email "$INSTALL_DIR/"
     install -m 755 scripts/send-email "$INSTALL_DIR/"
     cp policy.yaml "$CONFIG_DIR/"
 
     cd /
-    rm -rf "$SENTRA_REPO"
+    rm -rf "$EXECWALL_REPO"
 else
     # Download pre-built release
     log "Downloading pre-built release..."
 
     # Get latest version
-    SENTRA_VERSION=$(curl -sSL "https://api.github.com/repos/$GITHUB_REPO/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
-    [[ -z "$SENTRA_VERSION" ]] && error "Could not determine latest version"
-    log "Version: $SENTRA_VERSION"
+    EXECWALL_VERSION=$(curl -sSL "https://api.github.com/repos/$GITHUB_REPO/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+    [[ -z "$EXECWALL_VERSION" ]] && error "Could not determine latest version"
+    log "Version: $EXECWALL_VERSION"
 
-    DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$SENTRA_VERSION/sentra-$PLATFORM.tar.gz"
+    DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$EXECWALL_VERSION/execwall-$PLATFORM.tar.gz"
     TMP_DIR=$(mktemp -d)
     trap "rm -rf $TMP_DIR" EXIT
 
-    curl -sSL "$DOWNLOAD_URL" -o "$TMP_DIR/sentra.tar.gz"
-    tar xzf "$TMP_DIR/sentra.tar.gz" -C "$TMP_DIR"
+    curl -sSL "$DOWNLOAD_URL" -o "$TMP_DIR/execwall.tar.gz"
+    tar xzf "$TMP_DIR/execwall.tar.gz" -C "$TMP_DIR"
 
     # Install binaries
-    [[ -f "$TMP_DIR/sentra" ]] && install -m 755 "$TMP_DIR/sentra" "$INSTALL_DIR/"
+    [[ -f "$TMP_DIR/execwall" ]] && install -m 755 "$TMP_DIR/execwall" "$INSTALL_DIR/"
     [[ -f "$TMP_DIR/python_runner" ]] && install -m 755 "$TMP_DIR/python_runner" "$LIB_DIR/"
     [[ -f "$TMP_DIR/openclaw_launcher" ]] && install -m 755 "$TMP_DIR/openclaw_launcher" "$INSTALL_DIR/"
 
     # Download scripts from repo
-    curl -sSL "https://raw.githubusercontent.com/$GITHUB_REPO/main/scripts/sentra-shell" -o "$INSTALL_DIR/sentra-shell"
+    curl -sSL "https://raw.githubusercontent.com/$GITHUB_REPO/main/scripts/execwall-shell" -o "$INSTALL_DIR/execwall-shell"
     curl -sSL "https://raw.githubusercontent.com/$GITHUB_REPO/main/scripts/email" -o "$INSTALL_DIR/email"
     curl -sSL "https://raw.githubusercontent.com/$GITHUB_REPO/main/scripts/send-email" -o "$INSTALL_DIR/send-email"
-    chmod 755 "$INSTALL_DIR/sentra-shell" "$INSTALL_DIR/email" "$INSTALL_DIR/send-email"
+    chmod 755 "$INSTALL_DIR/execwall-shell" "$INSTALL_DIR/email" "$INSTALL_DIR/send-email"
 
     # Download policy
     [[ ! -f "$CONFIG_DIR/policy.yaml" ]] && \
         curl -sSL "https://raw.githubusercontent.com/$GITHUB_REPO/main/policy.yaml" -o "$CONFIG_DIR/policy.yaml"
 fi
 
-log "Sentra installed: $($INSTALL_DIR/sentra --version 2>/dev/null || echo 'OK')"
+log "Execwall installed: $($INSTALL_DIR/execwall --version 2>/dev/null || echo 'OK')"
 
 # =============================================================================
 # Install Node.js and OpenClaw
@@ -296,7 +296,7 @@ if [[ -n "$GMAIL_ADDRESS" ]] && [[ -n "$GMAIL_APP_PASSWORD" ]]; then
 [accounts.gmail]
 default = true
 email = "$GMAIL_ADDRESS"
-display-name = "Sentra"
+display-name = "Execwall"
 folder.alias.sent = "[Gmail]/Sent Mail"
 folder.alias.drafts = "[Gmail]/Drafts"
 
@@ -342,14 +342,14 @@ log "Creating systemd service..."
 
 cat > /etc/systemd/system/openclaw.service << EOF
 [Unit]
-Description=OpenClaw AI Agent Gateway with Sentra
+Description=OpenClaw AI Agent Gateway with Execwall
 After=network.target
 
 [Service]
 Type=simple
 User=$OWNER
-Environment=SHELL=/usr/local/bin/sentra-shell
-Environment=SENTRA_QUIET=1
+Environment=SHELL=/usr/local/bin/execwall-shell
+Environment=EXECWALL_QUIET=1
 Environment=HOME=$USER_HOME
 WorkingDirectory=$USER_HOME
 ExecStart=/usr/bin/openclaw gateway
@@ -371,9 +371,9 @@ log "Creating helper scripts..."
 
 cat > "$INSTALL_DIR/openclaw-start" << 'EOF'
 #!/bin/bash
-# Start OpenClaw with Sentra shell wrapper (quiet mode)
-export SHELL=/usr/local/bin/sentra-shell
-export SENTRA_QUIET=1
+# Start OpenClaw with Execwall shell wrapper (quiet mode)
+export SHELL=/usr/local/bin/execwall-shell
+export EXECWALL_QUIET=1
 exec openclaw gateway "$@"
 EOF
 chmod +x "$INSTALL_DIR/openclaw-start"
@@ -383,8 +383,8 @@ cat > "$INSTALL_DIR/openclaw-status" << 'EOF'
 echo "=== OpenClaw Processes ==="
 pgrep -a openclaw || echo "Not running"
 echo ""
-echo "=== Sentra Version ==="
-sentra --version 2>/dev/null || echo "Not found"
+echo "=== Execwall Version ==="
+execwall --version 2>/dev/null || echo "Not found"
 echo ""
 echo "=== Service Status ==="
 systemctl is-active openclaw 2>/dev/null || echo "Service not running"
@@ -407,14 +407,14 @@ echo -e "${CYAN}                  Installation Complete!                        
 echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
 echo ""
 echo -e "${GREEN}Installed Components:${NC}"
-echo "  • Sentra:       $($INSTALL_DIR/sentra --version 2>/dev/null || echo 'installed')"
+echo "  • Execwall:       $($INSTALL_DIR/execwall --version 2>/dev/null || echo 'installed')"
 echo "  • OpenClaw:     $(openclaw --version 2>/dev/null || echo 'installed')"
 echo "  • Himalaya:     $(himalaya --version 2>/dev/null || echo 'installed')"
 echo "  • Node.js:      $(node --version 2>/dev/null || echo 'installed')"
 echo ""
 echo -e "${GREEN}Installed Files:${NC}"
-echo "  • $INSTALL_DIR/sentra"
-echo "  • $INSTALL_DIR/sentra-shell"
+echo "  • $INSTALL_DIR/execwall"
+echo "  • $INSTALL_DIR/execwall-shell"
 echo "  • $INSTALL_DIR/email"
 echo "  • $INSTALL_DIR/send-email"
 echo "  • $CONFIG_DIR/policy.yaml"
@@ -439,10 +439,10 @@ echo "  4. Link WhatsApp:"
 echo "     Scan QR code shown in terminal"
 echo ""
 echo -e "${GREEN}Commands:${NC}"
-echo "  • openclaw-start          - Start OpenClaw with Sentra"
+echo "  • openclaw-start          - Start OpenClaw with Execwall"
 echo "  • openclaw-status         - Check status"
 echo "  • email <to> <subj> <body> - Send email"
-echo "  • sentra --quiet          - Policy shell (quiet mode)"
+echo "  • execwall --quiet          - Policy shell (quiet mode)"
 echo ""
 echo -e "${CYAN}Documentation: https://github.com/$GITHUB_REPO/blob/main/docs/ORACLE_CLOUD_DEPLOYMENT.md${NC}"
 echo ""

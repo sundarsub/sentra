@@ -151,19 +151,19 @@ pub struct LauncherConfig {
     #[serde(default)]
     pub default_profile: Option<String>,
 
-    /// Sentra integration settings
+    /// Execwall integration settings
     #[serde(default)]
-    pub sentra: SentraConfig,
+    pub execwall: ExecwallConfig,
 
     /// OpenClaw settings
     #[serde(default)]
     pub openclaw: OpenClawConfig,
 }
 
-/// Sentra integration configuration
+/// Execwall integration configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct SentraConfig {
-    /// Enable Sentra integration
+pub struct ExecwallConfig {
+    /// Enable Execwall integration
     #[serde(default = "default_true")]
     pub enabled: bool,
 
@@ -171,8 +171,8 @@ pub struct SentraConfig {
     #[serde(default = "default_repl")]
     pub mode: String,
 
-    /// Path to Sentra binary
-    #[serde(default = "default_sentra_binary")]
+    /// Path to Execwall binary
+    #[serde(default = "default_execwall_binary")]
     pub binary: String,
 
     /// Path to shell wrapper script
@@ -184,14 +184,14 @@ pub struct SentraConfig {
     pub python_runner: String,
 }
 
-impl Default for SentraConfig {
+impl Default for ExecwallConfig {
     fn default() -> Self {
         Self {
             enabled: true,
             mode: "repl".to_string(),
-            binary: "/usr/local/bin/sentra".to_string(),
-            shell_wrapper: "/usr/local/bin/sentra-shell".to_string(),
-            python_runner: "/usr/lib/sentra/python_runner".to_string(),
+            binary: "/usr/local/bin/execwall".to_string(),
+            shell_wrapper: "/usr/local/bin/execwall-shell".to_string(),
+            python_runner: "/usr/lib/execwall/python_runner".to_string(),
         }
     }
 }
@@ -202,14 +202,14 @@ fn default_true() -> bool {
 fn default_repl() -> String {
     "repl".to_string()
 }
-fn default_sentra_binary() -> String {
-    "/usr/local/bin/sentra".to_string()
+fn default_execwall_binary() -> String {
+    "/usr/local/bin/execwall".to_string()
 }
 fn default_shell_wrapper() -> String {
-    "/usr/local/bin/sentra-shell".to_string()
+    "/usr/local/bin/execwall-shell".to_string()
 }
 fn default_python_runner() -> String {
-    "/usr/lib/sentra/python_runner".to_string()
+    "/usr/lib/execwall/python_runner".to_string()
 }
 
 /// OpenClaw configuration
@@ -511,7 +511,7 @@ seccomp_profiles:
 
 launcher:
   default_profile: test_profile
-  sentra:
+  execwall:
     enabled: true
     mode: repl
 "#;
@@ -527,7 +527,7 @@ launcher:
             config.launcher.default_profile,
             Some("test_profile".to_string())
         );
-        assert!(config.launcher.sentra.enabled);
-        assert_eq!(config.launcher.sentra.mode, "repl");
+        assert!(config.launcher.execwall.enabled);
+        assert_eq!(config.launcher.execwall.mode, "repl");
     }
 }

@@ -1,10 +1,10 @@
-# Cloud Test Plan: Sentra + OR Gate + OpenClaw
+# Cloud Test Plan: Execwall + OR Gate + OpenClaw
 
 ## Goal
 
 Test the full stack on a free-tier cloud instance:
-- Sentra (code execution sandbox)
-- Sentra OR Gate (LLM routing with mock)
+- Execwall (code execution sandbox)
+- Execwall OR Gate (LLM routing with mock)
 - OpenClaw (AI agent)
 
 No OpenRouter - use mock server for LLM responses.
@@ -40,7 +40,7 @@ No OpenRouter - use mock server for LLM responses.
 │  │                  systemd services                     │  │
 │  │                                                       │  │
 │  │  ┌─────────────┐  ┌─────────────┐  ┌──────────────┐  │  │
-│  │  │   Sentra    │  │  OR Gate    │  │ Mock Router  │  │  │
+│  │  │   Execwall    │  │  OR Gate    │  │ Mock Router  │  │  │
 │  │  │   :9999     │  │   :8080     │  │    :9000     │  │  │
 │  │  │   (API)     │  │  (Python)   │  │   (Python)   │  │  │
 │  │  └─────────────┘  └─────────────┘  └──────────────┘  │  │
@@ -72,7 +72,7 @@ No OpenRouter - use mock server for LLM responses.
 
 1. Go to **Compute > Instances > Create Instance**
 2. Configure:
-   - **Name:** `sentra-test`
+   - **Name:** `execwall-test`
    - **Image:** Ubuntu 22.04 (aarch64)
    - **Shape:** VM.Standard.A1.Flex
      - 2 OCPUs (can use up to 4 free)
@@ -93,7 +93,7 @@ In Oracle Cloud Console:
 | Port | Protocol | Source | Purpose |
 |------|----------|--------|---------|
 | 22 | TCP | 0.0.0.0/0 | SSH |
-| 9999 | TCP | 0.0.0.0/0 | Sentra API (optional, for external test) |
+| 9999 | TCP | 0.0.0.0/0 | Execwall API (optional, for external test) |
 | 8080 | TCP | 0.0.0.0/0 | OR Gate (optional) |
 
 Also run on the VM:
@@ -116,7 +116,7 @@ sudo apt update && sudo apt upgrade -y
 # Install Python 3.11+
 sudo apt install -y python3 python3-pip python3-venv
 
-# Install Rust (for building Sentra)
+# Install Rust (for building Execwall)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
 
@@ -128,59 +128,59 @@ python3 --version   # 3.10+
 rustc --version     # 1.70+
 ```
 
-### Phase 5: Install Sentra (10 min)
+### Phase 5: Install Execwall (10 min)
 
 ```bash
 # Clone repo
-git clone https://github.com/sundarsub/sentra.git
-cd sentra
+git clone https://github.com/sundarsub/execwall.git
+cd execwall
 
-# Build Sentra (ARM64)
+# Build Execwall (ARM64)
 cargo build --release
 
 # Install binaries
-sudo mkdir -p /usr/lib/sentra
-sudo cp target/release/sentra /usr/local/bin/
-sudo cp target/release/python_runner /usr/lib/sentra/
+sudo mkdir -p /usr/lib/execwall
+sudo cp target/release/execwall /usr/local/bin/
+sudo cp target/release/python_runner /usr/lib/execwall/
 sudo cp target/release/openclaw_launcher /usr/local/bin/
 
 # Install config
-sudo mkdir -p /etc/sentra
-sudo cp policy.yaml /etc/sentra/
+sudo mkdir -p /etc/execwall
+sudo cp policy.yaml /etc/execwall/
 
 # Verify
-sentra --version
+execwall --version
 ```
 
 ### Phase 6: Install OR Gate (5 min)
 
 ```bash
-cd ~/sentra
+cd ~/execwall
 
 # Create venv
 python3 -m venv venv
 source venv/bin/activate
 
 # Install dependencies
-pip install -r sentra-or-gate/requirements.txt
+pip install -r execwall-or-gate/requirements.txt
 
 # Update policy.yaml to use mock
-sudo sed -i 's|https://openrouter.ai/api/v1|http://localhost:9000/v1|' /etc/sentra/policy.yaml
+sudo sed -i 's|https://openrouter.ai/api/v1|http://localhost:9000/v1|' /etc/execwall/policy.yaml
 ```
 
 ### Phase 7: Create systemd Services (10 min)
 
-**Sentra API service:**
+**Execwall API service:**
 ```bash
-sudo tee /etc/systemd/system/sentra-api.service << 'EOF'
+sudo tee /etc/systemd/system/execwall-api.service << 'EOF'
 [Unit]
-Description=Sentra API Server
+Description=Execwall API Server
 After=network.target
 
 [Service]
 Type=simple
 User=ubuntu
-ExecStart=/usr/local/bin/sentra --api --port 9999 --policy /etc/sentra/policy.yaml
+ExecStart=/usr/local/bin/execwall --api --port 9999 --policy /etc/execwall/policy.yaml
 Restart=always
 RestartSec=5
 
@@ -199,8 +199,8 @@ After=network.target
 [Service]
 Type=simple
 User=ubuntu
-WorkingDirectory=/home/ubuntu/sentra
-ExecStart=/home/ubuntu/sentra/venv/bin/python -m sentra-or-gate.mock_openrouter
+WorkingDirectory=/home/ubuntu/execwall
+ExecStart=/home/ubuntu/execwall/venv/bin/python -m execwall-or-gate.mock_openrouter
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
@@ -212,21 +212,21 @@ EOF
 
 **OR Gate service:**
 ```bash
-sudo tee /etc/systemd/system/sentra-or-gate.service << 'EOF'
+sudo tee /etc/systemd/system/execwall-or-gate.service << 'EOF'
 [Unit]
-Description=Sentra OR Gate
+Description=Execwall OR Gate
 After=network.target mock-openrouter.service
 
 [Service]
 Type=simple
 User=ubuntu
-WorkingDirectory=/home/ubuntu/sentra
-ExecStart=/home/ubuntu/sentra/venv/bin/python -m sentra-or-gate.main
+WorkingDirectory=/home/ubuntu/execwall
+ExecStart=/home/ubuntu/execwall/venv/bin/python -m execwall-or-gate.main
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
 Environment=OPENROUTER_API_KEY=mock-key
-Environment=CONFIG_PATH=/etc/sentra/policy.yaml
+Environment=CONFIG_PATH=/etc/execwall/policy.yaml
 
 [Install]
 WantedBy=multi-user.target
@@ -236,14 +236,14 @@ EOF
 **Enable and start:**
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now sentra-api
+sudo systemctl enable --now execwall-api
 sudo systemctl enable --now mock-openrouter
-sudo systemctl enable --now sentra-or-gate
+sudo systemctl enable --now execwall-or-gate
 
 # Check status
-sudo systemctl status sentra-api
+sudo systemctl status execwall-api
 sudo systemctl status mock-openrouter
-sudo systemctl status sentra-or-gate
+sudo systemctl status execwall-or-gate
 ```
 
 ### Phase 8: Install OpenClaw (15 min)
@@ -260,12 +260,12 @@ scp openclaw ubuntu@<PUBLIC_IP>:~/
 
 Configure OpenClaw to use:
 - **LLM endpoint:** `http://127.0.0.1:8080/v1/chat/completions`
-- **Code execution:** `http://127.0.0.1:9999` (Sentra API)
+- **Code execution:** `http://127.0.0.1:9999` (Execwall API)
 
 ### Phase 9: Test the Stack (10 min)
 
 ```bash
-# Test Sentra API
+# Test Execwall API
 echo '{"code": "print(1+1)", "profile": "python_sandbox"}' | nc localhost 9999
 
 # Test OR Gate health
@@ -281,7 +281,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 curl http://localhost:8080/api/spend/agent-1
 
 # Check mock logs
-cat ~/sentra/openrouter_requests.log
+cat ~/execwall/openrouter_requests.log
 ```
 
 ### Phase 10: Run OpenClaw (5 min)
@@ -296,7 +296,7 @@ openclaw_launcher --openclaw-bin /path/to/openclaw --port 9999
 # Set environment for OpenClaw
 export LLM_BASE_URL="http://127.0.0.1:8080/v1"
 export LLM_API_KEY="mock-key"
-export SENTRA_URL="http://127.0.0.1:9999"
+export EXECWALL_URL="http://127.0.0.1:9999"
 
 # Run OpenClaw
 ./openclaw
@@ -313,9 +313,9 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -H "X-Agent-ID: agent-1" \
   -d '{"messages": [{"role": "user", "content": "What is 2+2?"}]}'
 ```
-**Expected:** Mock response with `_sentra` metadata showing budget info.
+**Expected:** Mock response with `_execwall` metadata showing budget info.
 
-### Test 2: Code Execution via Sentra
+### Test 2: Code Execution via Execwall
 ```bash
 echo '{"code": "import math; print(math.pi)", "profile": "python_sandbox"}' | nc localhost 9999
 ```
@@ -354,7 +354,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 ### Test 5: OpenClaw End-to-End
 Run OpenClaw and give it a task that requires:
 1. LLM reasoning (via OR Gate → Mock)
-2. Code execution (via Sentra)
+2. Code execution (via Execwall)
 
 Example prompt: "Calculate the factorial of 10 using Python"
 
@@ -364,13 +364,13 @@ Example prompt: "Calculate the factorial of 10 using Python"
 
 ```bash
 # Watch all services
-sudo journalctl -f -u sentra-api -u mock-openrouter -u sentra-or-gate
+sudo journalctl -f -u execwall-api -u mock-openrouter -u execwall-or-gate
 
 # Check spend log
-tail -f ~/sentra/spend.jsonl
+tail -f ~/execwall/spend.jsonl
 
 # Check mock requests
-tail -f ~/sentra/openrouter_requests.log
+tail -f ~/execwall/openrouter_requests.log
 ```
 
 ---
@@ -390,7 +390,7 @@ tail -f ~/sentra/openrouter_requests.log
 
 ```bash
 # Stop services
-sudo systemctl stop sentra-api mock-openrouter sentra-or-gate
+sudo systemctl stop execwall-api mock-openrouter execwall-or-gate
 
 # Or terminate instance in Oracle Cloud Console
 ```
@@ -405,7 +405,7 @@ sudo systemctl stop sentra-api mock-openrouter sentra-or-gate
 | Create VM | 10 min |
 | Configure firewall | 5 min |
 | Install dependencies | 10 min |
-| Install Sentra | 10 min |
+| Install Execwall | 10 min |
 | Install OR Gate | 5 min |
 | Create services | 10 min |
 | Install OpenClaw | 15 min |

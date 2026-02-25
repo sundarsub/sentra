@@ -3,7 +3,7 @@
 #
 # This script provides full network isolation by:
 # 1. Creating a network namespace for OpenClaw
-# 2. Setting up a veth pair so OpenClaw can ONLY reach Sentra
+# 2. Setting up a veth pair so OpenClaw can ONLY reach Execwall
 # 3. Running openclaw_launcher inside the namespace
 #
 # Usage: sudo ./launch_openclaw_isolated.sh [openclaw_args...]
@@ -11,16 +11,16 @@
 set -e
 
 # Configuration
-SENTRA_PORT="${SENTRA_PORT:-9999}"
+EXECWALL_PORT="${EXECWALL_PORT:-9999}"
 NAMESPACE="openclaw_ns"
 VETH_HOST="veth_host"
 VETH_CONTAINER="veth_oc"
 HOST_IP="10.200.1.1"
 CONTAINER_IP="10.200.1.2"
-SENTRA_BIN="${SENTRA_BIN:-/usr/local/bin/sentra}"
+EXECWALL_BIN="${EXECWALL_BIN:-/usr/local/bin/execwall}"
 OPENCLAW_BIN="${OPENCLAW_BIN:-/usr/local/bin/openclaw}"
 LAUNCHER_BIN="${LAUNCHER_BIN:-/usr/local/bin/openclaw_launcher}"
-PYTHON_RUNNER="${PYTHON_RUNNER:-/usr/lib/sentra/python_runner}"
+PYTHON_RUNNER="${PYTHON_RUNNER:-/usr/lib/execwall/python_runner}"
 
 echo "╔══════════════════════════════════════════════════════════╗"
 echo "║    OpenClaw Isolated Launch - Full Network Isolation     ║"
@@ -65,35 +65,35 @@ ip netns exec "$NAMESPACE" ip addr add "$CONTAINER_IP/24" dev "$VETH_CONTAINER"
 ip netns exec "$NAMESPACE" ip link set "$VETH_CONTAINER" up
 ip netns exec "$NAMESPACE" ip link set lo up
 
-# Step 5: Set up NAT for Sentra port forwarding
-# OpenClaw at 10.200.1.2 connects to 10.200.1.1:$SENTRA_PORT
-# which is forwarded to host's Sentra on 127.0.0.1:$SENTRA_PORT
-echo "→ Setting up port forwarding to Sentra..."
+# Step 5: Set up NAT for Execwall port forwarding
+# OpenClaw at 10.200.1.2 connects to 10.200.1.1:$EXECWALL_PORT
+# which is forwarded to host's Execwall on 127.0.0.1:$EXECWALL_PORT
+echo "→ Setting up port forwarding to Execwall..."
 
 # Enable IP forwarding
 sysctl -w net.ipv4.ip_forward=1 > /dev/null
 
 # Forward traffic from veth to localhost
-iptables -t nat -A PREROUTING -i "$VETH_HOST" -p tcp --dport "$SENTRA_PORT" -j DNAT --to-destination "127.0.0.1:$SENTRA_PORT"
-iptables -A FORWARD -i "$VETH_HOST" -o lo -p tcp --dport "$SENTRA_PORT" -j ACCEPT
+iptables -t nat -A PREROUTING -i "$VETH_HOST" -p tcp --dport "$EXECWALL_PORT" -j DNAT --to-destination "127.0.0.1:$EXECWALL_PORT"
+iptables -A FORWARD -i "$VETH_HOST" -o lo -p tcp --dport "$EXECWALL_PORT" -j ACCEPT
 iptables -A FORWARD -o "$VETH_HOST" -i lo -m state --state ESTABLISHED,RELATED -j ACCEPT
 
-# Step 6: Start Sentra on host (if not running)
-if ! nc -z 127.0.0.1 "$SENTRA_PORT" 2>/dev/null; then
-    echo "→ Starting Sentra API server on port $SENTRA_PORT..."
-    "$SENTRA_BIN" --api --port "$SENTRA_PORT" --python-runner "$PYTHON_RUNNER" &
-    SENTRA_PID=$!
+# Step 6: Start Execwall on host (if not running)
+if ! nc -z 127.0.0.1 "$EXECWALL_PORT" 2>/dev/null; then
+    echo "→ Starting Execwall API server on port $EXECWALL_PORT..."
+    "$EXECWALL_BIN" --api --port "$EXECWALL_PORT" --python-runner "$PYTHON_RUNNER" &
+    EXECWALL_PID=$!
     sleep 1
-    echo "✓ Sentra started (PID: $SENTRA_PID)"
+    echo "✓ Execwall started (PID: $EXECWALL_PID)"
 else
-    echo "✓ Sentra already running on port $SENTRA_PORT"
+    echo "✓ Execwall already running on port $EXECWALL_PORT"
 fi
 
 # Step 7: Run openclaw_launcher in the namespace
 echo ""
 echo "═══════════════════════════════════════════════════════════"
 echo "  Network Isolated Environment Ready"
-echo "  OpenClaw can ONLY reach: $HOST_IP:$SENTRA_PORT (Sentra)"
+echo "  OpenClaw can ONLY reach: $HOST_IP:$EXECWALL_PORT (Execwall)"
 echo "═══════════════════════════════════════════════════════════"
 echo ""
 echo "→ Launching OpenClaw in isolated namespace..."
@@ -101,9 +101,9 @@ echo "→ Launching OpenClaw in isolated namespace..."
 # Run in namespace with seccomp
 ip netns exec "$NAMESPACE" "$LAUNCHER_BIN" \
     --openclaw-bin "$OPENCLAW_BIN" \
-    --sentra-bin "$SENTRA_BIN" \
-    --port "$SENTRA_PORT" \
-    --skip-sentra \
+    --execwall-bin "$EXECWALL_BIN" \
+    --port "$EXECWALL_PORT" \
+    --skip-execwall \
     --verbose \
     "$@"
 

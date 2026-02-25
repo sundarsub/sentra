@@ -1,17 +1,17 @@
-# Sentra - OpenClaw Execution Firewall
+# Execwall - OpenClaw Execution Firewall
 
 **Seccomp-locked AI agent sandbox with policy-enforced command governance, WhatsApp/Telegram integration, and Python isolation.**
 
 Deploy a secure AI agent execution environment on **Oracle Cloud Free Tier** - run your own WhatsApp AI assistant with enterprise-grade security.
 
-[![GitHub stars](https://img.shields.io/github/stars/sundarsub/sentra?style=social)](https://github.com/sundarsub/sentra/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/sundarsub/execwall?style=social)](https://github.com/sundarsub/execwall/stargazers)
 [![Deploy on Oracle Cloud](https://img.shields.io/badge/Deploy-Oracle%20Cloud%20Free%20Tier-F80000?style=for-the-badge&logo=oracle)](docs/ORACLE_CLOUD_DEPLOYMENT.md)
 
-> **If Sentra helps you, consider giving it a star** - it helps others discover the project!
+> **If Execwall helps you, consider giving it a star** - it helps others discover the project!
 
-## What is Sentra?
+## What is Execwall?
 
-Sentra is an **execution firewall** for AI agents. It sits between your AI (like OpenClaw) and the operating system, ensuring that only authorized commands run within defined security boundaries.
+Execwall is an **execution firewall** for AI agents. It sits between your AI (like OpenClaw) and the operating system, ensuring that only authorized commands run within defined security boundaries.
 
 **Key capabilities:**
 - **Seccomp syscall filtering** - Block dangerous operations at the kernel level
@@ -28,8 +28,8 @@ Deploy your own secure AI assistant for **$0/month** on Oracle Cloud Free Tier:
 # SSH into your Oracle Cloud VM
 ssh opc@your-vm-ip
 
-# Install Sentra execution firewall
-curl -sSL https://raw.githubusercontent.com/sundarsub/sentra/main/scripts/install-oracle-cloud.sh | sudo bash
+# Install Execwall execution firewall
+curl -sSL https://raw.githubusercontent.com/sundarsub/execwall/main/scripts/install-oracle-cloud.sh | sudo bash
 
 # Install OpenClaw
 sudo npm install -g openclaw
@@ -56,7 +56,7 @@ See the full [Oracle Cloud Deployment Guide](docs/ORACLE_CLOUD_DEPLOYMENT.md) fo
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                  Sentra Execution Firewall                       │
+│                  Execwall Execution Firewall                       │
 │                                                                  │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐   │
 │  │   Seccomp    │  │   Policy     │  │   Python Sandbox     │   │
@@ -109,46 +109,46 @@ See the full [Oracle Cloud Deployment Guide](docs/ORACLE_CLOUD_DEPLOYMENT.md) fo
 ### Quick Install (Recommended)
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/sundarsub/sentra/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/sundarsub/execwall/main/install.sh | bash
 ```
 
 ### Install with Systemd Service (Linux)
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/sundarsub/sentra/main/install.sh | INSTALL_SYSTEMD=true bash
+curl -sSL https://raw.githubusercontent.com/sundarsub/execwall/main/install.sh | INSTALL_SYSTEMD=true bash
 ```
 
 ### Install Specific Version
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/sundarsub/sentra/main/install.sh | SENTRA_VERSION=2.0.0 bash
+curl -sSL https://raw.githubusercontent.com/sundarsub/execwall/main/install.sh | EXECWALL_VERSION=2.0.0 bash
 ```
 
 ### Manual Installation
 
-1. Download the appropriate binary from [Releases](https://github.com/sundarsub/sentra/releases)
+1. Download the appropriate binary from [Releases](https://github.com/sundarsub/execwall/releases)
 2. Extract and install:
    ```bash
-   tar xzf sentra-linux-x86_64.tar.gz
-   sudo mv sentra /usr/local/bin/
-   sudo mv python_runner /usr/lib/sentra/
+   tar xzf execwall-linux-x86_64.tar.gz
+   sudo mv execwall /usr/local/bin/
+   sudo mv python_runner /usr/lib/execwall/
    ```
 3. Create configuration:
    ```bash
-   sudo mkdir -p /etc/sentra/profiles
-   sudo cp policy.yaml /etc/sentra/
-   sudo cp profiles/*.yaml /etc/sentra/profiles/
+   sudo mkdir -p /etc/execwall/profiles
+   sudo cp policy.yaml /etc/execwall/
+   sudo cp profiles/*.yaml /etc/execwall/profiles/
    ```
 
 ### What Gets Installed
 
 | Path | Description |
 |------|-------------|
-| `/usr/local/bin/sentra` | Main binary (REPL and API server) |
-| `/usr/lib/sentra/python_runner` | Python sandbox executor |
-| `/etc/sentra/policy.yaml` | Default execution policy |
-| `/etc/sentra/profiles/` | Sandbox profile configurations |
-| `/var/log/sentra/` | Audit log directory |
+| `/usr/local/bin/execwall` | Main binary (REPL and API server) |
+| `/usr/lib/execwall/python_runner` | Python sandbox executor |
+| `/etc/execwall/policy.yaml` | Default execution policy |
+| `/etc/execwall/profiles/` | Sandbox profile configurations |
+| `/var/log/execwall/` | Audit log directory |
 
 ## Usage Examples
 
@@ -158,41 +158,41 @@ Start the interactive shell with policy enforcement:
 
 ```bash
 # Use default policy
-sentra
+execwall
 
 # Use custom policy
-sentra --policy /path/to/policy.yaml
+execwall --policy /path/to/policy.yaml
 
 # Audit mode (log but don't block)
-sentra --mode audit
+execwall --mode audit
 
 # Verbose output
-sentra -v
+execwall -v
 ```
 
 Example session:
 ```
 +----------------------------------------------------------+
-|              Sentra - Execution Governance               |
+|              Execwall - Execution Governance               |
 |         Universal Shell with Policy Enforcement          |
 +----------------------------------------------------------+
 
-[ok] Loaded policy from: /etc/sentra/policy.yaml
+[ok] Loaded policy from: /etc/execwall/policy.yaml
 [ok] Policy: Policy v2.0 | Mode: Enforce | Default: Deny | Rules: 45
 [ok] Rate limit: 60 commands per 60 seconds
 [ok] Identity: developer
 
-[sentra:enforce]$ ls -la
+[execwall:enforce]$ ls -la
 total 48
 drwxr-xr-x  5 user user 4096 Feb 20 10:00 .
 ...
 
-[sentra:enforce]$ sudo rm -rf /
+[execwall:enforce]$ sudo rm -rf /
 [X] DENIED: sudo rm -rf /
   Rule:   block_sudo
   Reason: Privilege escalation via sudo is blocked
 
-[sentra:enforce]$ status
+[execwall:enforce]$ status
 Session Status:
   Session ID:        a1b2c3d4-5678-90ab-cdef-1234567890ab
   Identity:          developer
@@ -207,10 +207,10 @@ Start the API server:
 
 ```bash
 # Start API server on port 9800
-sentra --api --port 9800
+execwall --api --port 9800
 
 # With custom policy and logging
-sentra --api --port 9800 --policy /etc/sentra/policy.yaml --log /var/log/sentra/api.jsonl
+execwall --api --port 9800 --policy /etc/execwall/policy.yaml --log /var/log/execwall/api.jsonl
 ```
 
 Send execution requests:
@@ -252,7 +252,7 @@ API Request Format:
 
 ## OpenClaw VM Integration Guide
 
-OpenClaw VM is an AI agent execution environment that uses Sentra as its secure code execution backend. This section explains how to build an OpenClaw VM that safely executes AI-generated Python code.
+OpenClaw VM is an AI agent execution environment that uses Execwall as its secure code execution backend. This section explains how to build an OpenClaw VM that safely executes AI-generated Python code.
 
 ### Architecture Overview
 
@@ -270,7 +270,7 @@ OpenClaw VM is an AI agent execution environment that uses Sentra as its secure 
 |  +---------------------------+--------------------------------+  |
 |  |                  Code Execution Manager                    |  |
 |  |  - Validates code before execution                         |  |
-|  |  - Manages Sentra connection pool                          |  |
+|  |  - Manages Execwall connection pool                          |  |
 |  |  - Handles timeouts and retries                            |  |
 |  +---------------------------+--------------------------------+  |
 |                              |                                   |
@@ -278,7 +278,7 @@ OpenClaw VM is an AI agent execution environment that uses Sentra as its secure 
                                | TCP JSON API
                                v
 +------------------------------------------------------------------+
-|                          Sentra                                   |
+|                          Execwall                                   |
 |  - Policy enforcement          - Seccomp syscall filtering       |
 |  - Namespace isolation         - Cgroup resource limits          |
 |  - Audit logging               - Code hashing                    |
@@ -299,15 +299,15 @@ Here's a minimal OpenClaw VM implementation in Python:
 #!/usr/bin/env python3
 """
 OpenClaw VM - Minimal Implementation
-Executes AI-generated Python code via Sentra sandbox
+Executes AI-generated Python code via Execwall sandbox
 """
 
 import socket
 import json
 from typing import Optional
 
-class SentraClient:
-    """Client for Sentra JSON API"""
+class ExecwallClient:
+    """Client for Execwall JSON API"""
 
     def __init__(self, host: str = "127.0.0.1", port: int = 9800):
         self.host = host
@@ -320,7 +320,7 @@ class SentraClient:
         mem_max_mb: int = 512,
         cwd: str = "/tmp"
     ) -> dict:
-        """Execute Python code in Sentra sandbox"""
+        """Execute Python code in Execwall sandbox"""
         request = {
             "code": code,
             "profile": "python_sandbox",
@@ -349,12 +349,12 @@ class OpenClawVM:
     """
     OpenClaw VM - AI Agent Execution Environment
 
-    This VM safely executes AI-generated Python code using Sentra
+    This VM safely executes AI-generated Python code using Execwall
     as the sandboxed execution backend.
     """
 
-    def __init__(self, sentra_host: str = "127.0.0.1", sentra_port: int = 9800):
-        self.client = SentraClient(sentra_host, sentra_port)
+    def __init__(self, execwall_host: str = "127.0.0.1", execwall_port: int = 9800):
+        self.client = ExecwallClient(execwall_host, execwall_port)
         self.execution_history = []
 
     def run_code(self, code: str, timeout: int = 30) -> dict:
@@ -391,7 +391,7 @@ class OpenClawVM:
         """
         Complete AI agent loop:
         1. AI generates code from user request
-        2. Code executes in Sentra sandbox
+        2. Code executes in Execwall sandbox
         3. AI interprets results
 
         Args:
@@ -460,8 +460,8 @@ class ExecutionResult:
     truncated: bool
 
 
-class AsyncSentraClient:
-    """Async client with connection pooling for Sentra API"""
+class AsyncExecwallClient:
+    """Async client with connection pooling for Execwall API"""
 
     def __init__(
         self,
@@ -554,8 +554,8 @@ class AsyncSentraClient:
 class ProductionOpenClawVM:
     """Production-ready OpenClaw VM with async execution"""
 
-    def __init__(self, sentra_host: str = "127.0.0.1", sentra_port: int = 9800):
-        self.client = AsyncSentraClient(sentra_host, sentra_port)
+    def __init__(self, execwall_host: str = "127.0.0.1", execwall_port: int = 9800):
+        self.client = AsyncExecwallClient(execwall_host, execwall_port)
 
     async def execute(self, code: str, timeout: int = 30) -> ExecutionResult:
         """Execute Python code asynchronously"""
@@ -595,7 +595,7 @@ if __name__ == "__main__":
 For Rust-based OpenClaw VM implementations:
 
 ```rust
-//! OpenClaw VM - Rust Client for Sentra
+//! OpenClaw VM - Rust Client for Execwall
 //!
 //! Add to Cargo.toml:
 //! ```toml
@@ -688,21 +688,21 @@ print(f"Pi = {math.pi:.10f}")
 
 ### Deployment Guide
 
-#### 1. Install Sentra on the Execution Host
+#### 1. Install Execwall on the Execution Host
 
 ```bash
-# Install Sentra
-curl -sSL https://raw.githubusercontent.com/sundarsub/sentra/main/install.sh | sudo bash
+# Install Execwall
+curl -sSL https://raw.githubusercontent.com/sundarsub/execwall/main/install.sh | sudo bash
 
 # Verify installation
-sentra --version
+execwall --version
 ```
 
 #### 2. Configure the Sandbox Policy
 
 ```bash
 # Edit policy for your use case
-sudo vim /etc/sentra/policy.yaml
+sudo vim /etc/execwall/policy.yaml
 ```
 
 Key policy settings for OpenClaw VM:
@@ -714,7 +714,7 @@ default: deny
 
 profiles:
   python_sandbox:
-    runner: "/usr/lib/sentra/python_runner"
+    runner: "/usr/lib/execwall/python_runner"
     python_bin: "/usr/bin/python3"
     deny_spawn_processes: true
     default_network: deny
@@ -744,20 +744,20 @@ profiles:
     syscall_profile: restricted
 ```
 
-#### 3. Start Sentra API Server
+#### 3. Start Execwall API Server
 
 **Option A: Direct execution**
 ```bash
-sentra --api --port 9800 --policy /etc/sentra/policy.yaml
+execwall --api --port 9800 --policy /etc/execwall/policy.yaml
 ```
 
 **Option B: Systemd service (Linux)**
 ```bash
 # Enable and start
-sudo systemctl enable --now sentra-api
+sudo systemctl enable --now execwall-api
 
 # Check status
-sudo systemctl status sentra-api
+sudo systemctl status execwall-api
 ```
 
 **Option C: Docker deployment**
@@ -767,23 +767,23 @@ FROM ubuntu:22.04
 # Install dependencies
 RUN apt-get update && apt-get install -y python3 curl
 
-# Install Sentra
-RUN curl -sSL https://raw.githubusercontent.com/sundarsub/sentra/main/install.sh | bash
+# Install Execwall
+RUN curl -sSL https://raw.githubusercontent.com/sundarsub/execwall/main/install.sh | bash
 
 # Expose API port
 EXPOSE 9800
 
-# Run Sentra API
-CMD ["sentra", "--api", "--port", "9800", "--policy", "/etc/sentra/policy.yaml"]
+# Run Execwall API
+CMD ["execwall", "--api", "--port", "9800", "--policy", "/etc/execwall/policy.yaml"]
 ```
 
-#### 4. Connect OpenClaw VM to Sentra
+#### 4. Connect OpenClaw VM to Execwall
 
 ```python
 # In your OpenClaw VM application
 vm = OpenClawVM(
-    sentra_host="sentra-server.internal",  # Or "127.0.0.1" for local
-    sentra_port=9800
+    execwall_host="execwall-server.internal",  # Or "127.0.0.1" for local
+    execwall_port=9800
 )
 
 # Execute AI-generated code safely
@@ -792,7 +792,7 @@ result = vm.run_code(ai_generated_python_code)
 
 ### Security Best Practices
 
-1. **Network Isolation**: Run Sentra on a private network, not exposed to the internet
+1. **Network Isolation**: Run Execwall on a private network, not exposed to the internet
 2. **Resource Limits**: Set appropriate timeouts and memory limits for your use case
 3. **Audit Logging**: Enable and monitor audit logs for security events
 4. **Policy Review**: Regularly review and update the execution policy
@@ -800,30 +800,30 @@ result = vm.run_code(ai_generated_python_code)
 
 ### Monitoring and Observability
 
-Monitor Sentra execution via audit logs:
+Monitor Execwall execution via audit logs:
 
 ```bash
 # Stream audit logs
-tail -f /var/log/sentra/audit.jsonl | jq .
+tail -f /var/log/execwall/audit.jsonl | jq .
 
 # Filter for timeouts
-grep '"timed_out":true' /var/log/sentra/audit.jsonl
+grep '"timed_out":true' /var/log/execwall/audit.jsonl
 
 # Filter for failed executions
-grep -v '"exit_code":0' /var/log/sentra/audit.jsonl
+grep -v '"exit_code":0' /var/log/execwall/audit.jsonl
 ```
 
 ### Using with systemd (Linux)
 
 ```bash
 # Enable and start the API service
-sudo systemctl enable --now sentra-api
+sudo systemctl enable --now execwall-api
 
 # Check status
-sudo systemctl status sentra-api
+sudo systemctl status execwall-api
 
 # View logs
-journalctl -u sentra-api -f
+journalctl -u execwall-api -f
 ```
 
 ### Policy Configuration
@@ -875,7 +875,7 @@ rules:
 
 ### Linux Namespace Isolation
 
-Sentra uses Linux namespaces to isolate Python execution:
+Execwall uses Linux namespaces to isolate Python execution:
 
 | Namespace | Purpose |
 |-----------|---------|
@@ -966,7 +966,7 @@ rules:
 ```yaml
 profiles:
   python_sandbox_v1:
-    runner: "/usr/lib/sentra/python_runner"
+    runner: "/usr/lib/execwall/python_runner"
     python_bin: "/usr/bin/python3"
     deny_spawn_processes: true
     default_network: deny
@@ -1025,14 +1025,14 @@ syscall_profiles:
 
 ```bash
 # Clone repository
-git clone https://github.com/sundarsub/sentra.git
-cd sentra
+git clone https://github.com/sundarsub/execwall.git
+cd execwall
 
 # Build release binaries
 cargo build --release
 
 # Binaries are in target/release/
-ls -la target/release/sentra target/release/python_runner
+ls -la target/release/execwall target/release/python_runner
 ```
 
 ### Linux-specific Dependencies
@@ -1083,7 +1083,7 @@ cargo run -- --api --port 9800
                               | JSON API (TCP :9800)
                               v
 +-------------------------------------------------------------+
-|                         Sentra                              |
+|                         Execwall                              |
 |  +-------------+  +--------------+  +------------------+    |
 |  | API Server  |  |Policy Engine |  |  Audit Logger    |    |
 |  |  (Tokio)    |  |  (Regex)     |  |  (JSON Lines)    |    |
@@ -1152,7 +1152,7 @@ Audit logs are JSON Lines format, one entry per line:
 
 ## Security Considerations
 
-1. **Run as non-root**: Sentra should run as an unprivileged user in production
+1. **Run as non-root**: Execwall should run as an unprivileged user in production
 2. **Policy review**: Audit your policy.yaml before deployment
 3. **Log monitoring**: Monitor audit logs for security events
 4. **Network isolation**: The sandbox blocks all network by default
@@ -1171,7 +1171,7 @@ When deployed as a ForceCommand or login shell:
 # SSH forced command configuration
 # /etc/ssh/sshd_config
 Match User developer
-    ForceCommand /usr/local/bin/sentra --policy /etc/sentra/policy.yaml
+    ForceCommand /usr/local/bin/execwall --policy /etc/execwall/policy.yaml
 ```
 
 ### Rate Limiting for Breach Containment
@@ -1183,14 +1183,14 @@ Rate limiting disrupts attack patterns:
 
 ## OpenClaw Launcher - Seccomp-Locked AI Agent Execution
 
-The `openclaw_launcher` binary provides a **seccomp-locked execution environment** for AI agents. This implements the defense-in-depth principle: even if the AI agent is compromised, it **cannot directly execute code** - all execution must go through Sentra's API.
+The `openclaw_launcher` binary provides a **seccomp-locked execution environment** for AI agents. This implements the defense-in-depth principle: even if the AI agent is compromised, it **cannot directly execute code** - all execution must go through Execwall's API.
 
 ### Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  openclaw_launcher                                               │
-│  1. Start Sentra API server                                     │
+│  1. Start Execwall API server                                     │
 │  2. Apply seccomp filter (blocks execve, fork, etc.)            │
 │  3. Exec OpenClaw (this is the LAST exec before lockdown)       │
 └─────────────────────────────────────────────────────────────────┘
@@ -1201,16 +1201,16 @@ The `openclaw_launcher` binary provides a **seccomp-locked execution environment
 │  ✗ Cannot execve() - BLOCKED by seccomp                         │
 │  ✗ Cannot fork() - BLOCKED by seccomp                           │
 │  ✗ Cannot run subprocess.run() - BLOCKED                        │
-│  ✓ CAN connect to Sentra API - ALLOWED                          │
+│  ✓ CAN connect to Execwall API - ALLOWED                          │
 │  ✓ CAN do regular Python computation - ALLOWED                  │
 │                                                                 │
-│  To execute code, must call Sentra API:                         │
+│  To execute code, must call Execwall API:                         │
 │  → {"code": "...", "profile": "python_sandbox"}                 │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼ TCP 127.0.0.1:9999
 ┌─────────────────────────────────────────────────────────────────┐
-│  Sentra API Server                                               │
+│  Execwall API Server                                               │
 │  → Receives execution request                                   │
 │  → Spawns python_runner in ANOTHER sandbox                      │
 │  → Returns result to OpenClaw                                   │
@@ -1223,14 +1223,14 @@ The `openclaw_launcher` binary provides a **seccomp-locked execution environment
 # Basic usage - launch OpenClaw in locked environment
 openclaw_launcher --openclaw-bin /path/to/openclaw
 
-# Custom Sentra port
+# Custom Execwall port
 openclaw_launcher --port 9800 --openclaw-bin /path/to/openclaw
 
 # Verbose output to see security status
 openclaw_launcher -v --openclaw-bin /path/to/openclaw
 
-# Skip Sentra start (if already running)
-openclaw_launcher --skip-sentra --openclaw-bin /path/to/openclaw
+# Skip Execwall start (if already running)
+openclaw_launcher --skip-execwall --openclaw-bin /path/to/openclaw
 ```
 
 ### Command Line Options
@@ -1238,10 +1238,10 @@ openclaw_launcher --skip-sentra --openclaw-bin /path/to/openclaw
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--openclaw-bin` | `/usr/local/bin/openclaw` | Path to AI agent binary |
-| `--sentra-bin` | `/usr/local/bin/sentra` | Path to Sentra binary |
-| `--port` | `9999` | Sentra API port |
-| `--python-runner` | `/usr/lib/sentra/python_runner` | Path to sandbox executor |
-| `--skip-sentra` | `false` | Skip starting Sentra |
+| `--execwall-bin` | `/usr/local/bin/execwall` | Path to Execwall binary |
+| `--port` | `9999` | Execwall API port |
+| `--python-runner` | `/usr/lib/execwall/python_runner` | Path to sandbox executor |
+| `--skip-execwall` | `false` | Skip starting Execwall |
 | `-v, --verbose` | `false` | Show detailed security info |
 
 ### What Gets Blocked (Linux with seccomp)
@@ -1261,21 +1261,21 @@ When running on Linux with seccomp enabled, the AI agent cannot:
 
 | Operation | Why Allowed |
 |-----------|-------------|
-| Connect to Sentra API | Required for code execution |
+| Connect to Execwall API | Required for code execution |
 | Regular Python computation | math, json, etc. work normally |
 | File operations in `/work` | Designated working directory |
 | Threading | Required for async operations |
 
 ### Full Network Isolation (Optional)
 
-For complete network isolation where OpenClaw can ONLY reach Sentra:
+For complete network isolation where OpenClaw can ONLY reach Execwall:
 
 ```bash
 # Use the included isolation script (requires sudo/root)
 sudo ./scripts/launch_openclaw_isolated.sh /path/to/openclaw
 
 # Or manually with network namespaces:
-# 1. Create namespace with veth pair to only reach Sentra
+# 1. Create namespace with veth pair to only reach Execwall
 # 2. Run openclaw_launcher inside the namespace
 ```
 
@@ -1296,7 +1296,7 @@ Expected output on Linux:
 ✓ PASS: os.system() blocked
 ✓ PASS: os.fork() blocked
 ✓ PASS: External network blocked
-✓ PASS: Sentra API reachable
+✓ PASS: Execwall API reachable
 ✓ PASS: File operations work
 ✓ PASS: Python computation works
 ```
@@ -1304,25 +1304,25 @@ Expected output on Linux:
 ### Defense-in-Depth Stack
 
 1. **OpenClaw Seccomp**: Blocks execve, fork, arbitrary network
-2. **Network Namespace**: OpenClaw can ONLY reach Sentra API
-3. **Sentra Policy**: Controls what code can be executed
+2. **Network Namespace**: OpenClaw can ONLY reach Execwall API
+3. **Execwall Policy**: Controls what code can be executed
 4. **python_runner Sandbox**: Another layer of namespace + seccomp + cgroups
 
 Even if the AI agent is fully compromised:
 - It cannot execute code directly (seccomp blocks execve)
-- It cannot phone home (network restricted to Sentra)
-- All code execution goes through Sentra's policy engine
+- It cannot phone home (network restricted to Execwall)
+- All code execution goes through Execwall's policy engine
 - Code runs in a separate, isolated sandbox
 
-## Sentra OR Gate - Budget-Based LLM Routing
+## Execwall OR Gate - Budget-Based LLM Routing
 
-Sentra OR Gate is a Python proxy that routes LLM requests to OpenRouter with automatic model selection based on budget. As budget depletes, it automatically degrades from premium to cheaper models.
+Execwall OR Gate is a Python proxy that routes LLM requests to OpenRouter with automatic model selection based on budget. As budget depletes, it automatically degrades from premium to cheaper models.
 
 ### Architecture
 
 ```
 ┌──────────┐     ┌──────────────┐     ┌────────────┐
-│ OpenClaw │────▶│ Sentra OR    │────▶│ OpenRouter │
+│ OpenClaw │────▶│ Execwall OR    │────▶│ OpenRouter │
 │ (Agent)  │     │ Gate :8080   │     │            │
 └──────────┘     └──────────────┘     └────────────┘
                         │
@@ -1345,13 +1345,13 @@ Sentra OR Gate is a Python proxy that routes LLM requests to OpenRouter with aut
 
 ```bash
 # Install dependencies
-pip install -r sentra-or-gate/requirements.txt
+pip install -r execwall-or-gate/requirements.txt
 
 # Set OpenRouter API key
 export OPENROUTER_API_KEY="sk-or-v1-..."
 
 # Run the gate
-python -m sentra-or-gate.main
+python -m execwall-or-gate.main
 
 # Test
 curl -X POST http://localhost:8080/v1/chat/completions \
@@ -1399,14 +1399,14 @@ cost_routing:
 
 ### Integration with Seccomp-Locked OpenClaw
 
-When running with `openclaw_launcher`, OpenClaw can reach both Sentra (for code execution) and OR Gate (for LLM requests) on loopback:
+When running with `openclaw_launcher`, OpenClaw can reach both Execwall (for code execution) and OR Gate (for LLM requests) on loopback:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    LOOPBACK (127.0.0.1)                     │
 │                                                             │
 │  ┌──────────┐                                               │
-│  │ OpenClaw │──┬──▶ Sentra      :9999  (code execution)     │
+│  │ OpenClaw │──┬──▶ Execwall      :9999  (code execution)     │
 │  │ (locked) │  │                                            │
 │  └──────────┘  └──▶ OR Gate     :8080  (LLM requests)       │
 │                                                             │
@@ -1421,10 +1421,10 @@ For testing without real API calls:
 
 ```bash
 # Terminal 1: Start mock OpenRouter
-python -m sentra-or-gate.mock_openrouter
+python -m execwall-or-gate.mock_openrouter
 
 # Terminal 2: Update policy.yaml base_url to http://localhost:9000/v1
-OPENROUTER_API_KEY="test" python -m sentra-or-gate.main
+OPENROUTER_API_KEY="test" python -m execwall-or-gate.main
 
 # Terminal 3: Send test requests
 curl -X POST http://localhost:8080/v1/chat/completions \
@@ -1433,19 +1433,19 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -d '{"messages": [{"role": "user", "content": "Hello"}]}'
 ```
 
-See [sentra-or-gate/README.md](sentra-or-gate/README.md) for full documentation.
+See [execwall-or-gate/README.md](execwall-or-gate/README.md) for full documentation.
 
 ---
 
 ## Support the Project
 
-If Sentra has been useful for your AI agent security needs:
+If Execwall has been useful for your AI agent security needs:
 
-- **Star this repo** - helps others discover Sentra
+- **Star this repo** - helps others discover Execwall
 - **Share** - tell others about secure AI agent execution
 - **Contribute** - PRs and issues welcome
 
-[![Star History](https://img.shields.io/github/stars/sundarsub/sentra?style=social)](https://github.com/sundarsub/sentra/stargazers)
+[![Star History](https://img.shields.io/github/stars/sundarsub/execwall?style=social)](https://github.com/sundarsub/execwall/stargazers)
 
 ## License
 
@@ -1457,5 +1457,5 @@ Sundar Subramaniam
 
 ## Support
 
-- Issues: [GitHub Issues](https://github.com/sundarsub/sentra/issues)
-- Email: sentrahelp@gmail.com
+- Issues: [GitHub Issues](https://github.com/sundarsub/execwall/issues)
+- Email: execwallhelp@gmail.com

@@ -20,11 +20,11 @@ ssh -i "/Users/sundarsubramaniam/Downloads/ssh-key-2026-02-23 (1).key" opc@150.1
 
 | Component | Path | Status |
 |-----------|------|--------|
-| sentra | /usr/local/bin/sentra | Installed |
+| execwall | /usr/local/bin/execwall | Installed |
 | openclaw_launcher | /usr/local/bin/openclaw_launcher | Installed |
-| python_runner | /usr/lib/sentra/python_runner | Installed |
-| sentra-shell | /usr/local/bin/sentra-shell | Installed |
-| policy.yaml | /etc/sentra/policy.yaml | Configured |
+| python_runner | /usr/lib/execwall/python_runner | Installed |
+| execwall-shell | /usr/local/bin/execwall-shell | Installed |
+| policy.yaml | /etc/execwall/policy.yaml | Configured |
 | himalaya | /home/opc/.local/bin/himalaya | Installed |
 | openclaw | /usr/bin/openclaw | Installed |
 
@@ -32,7 +32,7 @@ ssh -i "/Users/sundarsubramaniam/Downloads/ssh-key-2026-02-23 (1).key" opc@150.1
 
 | Setting | Value |
 |---------|-------|
-| Email | sentra@lma.llc |
+| Email | execwall@lma.llc |
 | Provider | Gmail (Google Workspace) |
 | IMAP | imap.gmail.com:993 (TLS) |
 | SMTP | smtp.gmail.com:465 (TLS) |
@@ -53,7 +53,7 @@ ssh -i "/Users/sundarsubramaniam/Downloads/ssh-key-2026-02-23 (1).key" opc@150.1
   "exec": {
     "pathPrepend": [
       "/home/opc/.local/bin",
-      "/home/opc/sentra/bin"
+      "/home/opc/execwall/bin"
     ]
   }
 }
@@ -64,7 +64,7 @@ ssh -i "/Users/sundarsubramaniam/Downloads/ssh-key-2026-02-23 (1).key" opc@150.1
 Located in `~/.openclaw/.env`:
 - OPENROUTER_API_KEY
 
-Located in `/etc/sentra/env`:
+Located in `/etc/execwall/env`:
 - OPENROUTER_API_KEY
 
 ## Seccomp Profile
@@ -78,7 +78,7 @@ Default profile: `gateway` (allows subprocess spawning, blocks dangerous syscall
 openclaw_launcher \
   --openclaw-bin /usr/bin/openclaw \
   --seccomp-profile gateway \
-  --sentra-repl \
+  --execwall-repl \
   -- gateway
 
 # Or via systemd
@@ -103,7 +103,7 @@ Message body" | ~/.local/bin/himalaya message send
 openclaw skills list
 
 # Check Sentra policy
-sentra --policy /etc/sentra/policy.yaml
+execwall --policy /etc/execwall/policy.yaml
 ```
 
 ## Networking

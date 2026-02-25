@@ -2,7 +2,7 @@
 
 ## Overview
 
-Add configurable seccomp profiles to `policy.yaml` that `openclaw_launcher` reads before launching OpenClaw. The launcher applies the seccomp filter, then execs OpenClaw which uses Sentra REPL for command governance.
+Add configurable seccomp profiles to `policy.yaml` that `openclaw_launcher` reads before launching OpenClaw. The launcher applies the seccomp filter, then execs OpenClaw which uses Execwall REPL for command governance.
 
 ## Current Architecture
 
@@ -11,7 +11,7 @@ Add configurable seccomp profiles to `policy.yaml` that `openclaw_launcher` read
 │  openclaw_launcher  │
 │  (Rust binary)      │
 │                     │
-│  1. Start Sentra    │
+│  1. Start Execwall    │
 │  2. Apply seccomp   │  ← Hardcoded in Rust
 │  3. Exec OpenClaw   │
 └─────────────────────┘
@@ -23,13 +23,13 @@ Add configurable seccomp profiles to `policy.yaml` that `openclaw_launcher` read
 │                     │
 │  - WhatsApp         │
 │  - AI agent         │
-│  - Exec commands    │  → Direct execution (no Sentra)
+│  - Exec commands    │  → Direct execution (no Execwall)
 └─────────────────────┘
 ```
 
 **Problems:**
 - Seccomp profiles hardcoded in Rust
-- OpenClaw bypasses Sentra REPL for commands
+- OpenClaw bypasses Execwall REPL for commands
 - No profile selection (one-size-fits-all)
 
 ## Proposed Architecture
@@ -42,13 +42,13 @@ Add configurable seccomp profiles to `policy.yaml` that `openclaw_launcher` read
 │  1. Read policy.yaml│
 │  2. Select profile  │  ← From YAML (e.g., "whatsapp_agent")
 │  3. Apply seccomp   │
-│  4. Set SHELL=sentra│
+│  4. Set SHELL=execwall│
 │  5. Exec OpenClaw   │
 └─────────────────────┘
          │
          ▼
 ┌─────────────────────┐      ┌─────────────────────┐
-│     OpenClaw        │      │    Sentra REPL      │
+│     OpenClaw        │      │    Execwall REPL      │
 │  (Node.js agent)    │ ───► │  (command gateway)  │
 │                     │      │                     │
 │  - WhatsApp ✓       │      │  - Policy enforce   │
@@ -155,7 +155,7 @@ seccomp_profiles:
         - "*.whatsapp.net:443"
         - "*.whatsapp.com:443"
         - "web.whatsapp.com:443"
-        - "127.0.0.1:*"  # Loopback for Sentra
+        - "127.0.0.1:*"  # Loopback for Execwall
       deny_outbound:
         - "*"  # Block everything else
 
@@ -197,20 +197,20 @@ launcher:
   # Default seccomp profile to apply
   default_profile: whatsapp_agent
 
-  # Sentra integration
-  sentra:
+  # Execwall integration
+  execwall:
     enabled: true
     mode: repl          # repl | api
-    binary: /usr/local/bin/sentra
-    policy: /etc/sentra/policy.yaml
-    python_runner: /usr/lib/sentra/python_runner
+    binary: /usr/local/bin/execwall
+    policy: /etc/execwall/policy.yaml
+    python_runner: /usr/lib/execwall/python_runner
 
   # OpenClaw settings
   openclaw:
     binary: /usr/local/bin/openclaw
-    shell_wrapper: /usr/local/bin/sentra-shell
+    shell_wrapper: /usr/local/bin/execwall-shell
     env:
-      SHELL: "{{ sentra.shell_wrapper }}"
+      SHELL: "{{ execwall.shell_wrapper }}"
       GEMINI_API_KEY: "${GEMINI_API_KEY}"
 ```
 
@@ -311,7 +311,7 @@ impl SeccompProfile {
 **Changes to `src/bin/openclaw_launcher.rs`:**
 
 ```rust
-use sentra::seccomp_profile::{SeccompProfile, load_profiles};
+use execwall::seccomp_profile::{SeccompProfile, load_profiles};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -322,12 +322,12 @@ struct Args {
     seccomp_profile: String,
 
     /// Path to policy.yaml
-    #[arg(long, default_value = "/etc/sentra/policy.yaml")]
+    #[arg(long, default_value = "/etc/execwall/policy.yaml")]
     policy: String,
 
-    /// Use Sentra REPL for command execution
+    /// Use Execwall REPL for command execution
     #[arg(long)]
-    sentra_repl: bool,
+    execwall_repl: bool,
 }
 
 fn main() {
@@ -342,9 +342,9 @@ fn main() {
     // Apply seccomp from profile
     apply_seccomp_from_profile(&profile, args.verbose)?;
 
-    // Set SHELL to Sentra wrapper if enabled
-    if args.sentra_repl {
-        std::env::set_var("SHELL", "/usr/local/bin/sentra-shell");
+    // Set SHELL to Execwall wrapper if enabled
+    if args.execwall_repl {
+        std::env::set_var("SHELL", "/usr/local/bin/execwall-shell");
     }
 
     // Exec OpenClaw
@@ -427,25 +427,25 @@ fn apply_seccomp_from_profile(
 }
 ```
 
-### Phase 4: Sentra Shell Wrapper
+### Phase 4: Execwall Shell Wrapper
 
-**File:** `/usr/local/bin/sentra-shell`
+**File:** `/usr/local/bin/execwall-shell`
 
 ```bash
 #!/bin/bash
-# Sentra Shell - REPL wrapper for OpenClaw
-# Routes all exec commands through Sentra policy enforcement
+# Execwall Shell - REPL wrapper for OpenClaw
+# Routes all exec commands through Execwall policy enforcement
 
-SENTRA_BIN="${SENTRA_BIN:-/usr/local/bin/sentra}"
-POLICY="${SENTRA_POLICY:-/etc/sentra/policy.yaml}"
-PYTHON_RUNNER="${PYTHON_RUNNER:-/usr/lib/sentra/python_runner}"
+EXECWALL_BIN="${EXECWALL_BIN:-/usr/local/bin/execwall}"
+POLICY="${EXECWALL_POLICY:-/etc/execwall/policy.yaml}"
+PYTHON_RUNNER="${PYTHON_RUNNER:-/usr/lib/execwall/python_runner}"
 
 if [[ $# -gt 0 ]]; then
     # Single command mode
-    echo "$*" | "$SENTRA_BIN" --policy "$POLICY" --python-runner "$PYTHON_RUNNER"
+    echo "$*" | "$EXECWALL_BIN" --policy "$POLICY" --python-runner "$PYTHON_RUNNER"
 else
     # Interactive REPL
-    exec "$SENTRA_BIN" --policy "$POLICY" --python-runner "$PYTHON_RUNNER"
+    exec "$EXECWALL_BIN" --policy "$POLICY" --python-runner "$PYTHON_RUNNER"
 fi
 ```
 
@@ -465,7 +465,7 @@ User sends WhatsApp message
 │     - Block: fork, vfork, ptrace, mount, etc.          │
 │     - Allow: socket, connect (for WhatsApp)            │
 │     - Conditional: clone (threads OK, processes NO)     │
-│  5. Set SHELL=/usr/local/bin/sentra-shell              │
+│  5. Set SHELL=/usr/local/bin/execwall-shell              │
 │  6. exec(openclaw gateway)                              │
 └─────────────────────────────────────────────────────────┘
          │
@@ -482,7 +482,7 @@ User sends WhatsApp message
          │
          ▼
 ┌─────────────────────────────────────────────────────────┐
-│                   Sentra REPL                            │
+│                   Execwall REPL                            │
 │              (policy enforcement)                        │
 │                                                         │
 │  1. Receive command: `ls -la /tmp`                      │
@@ -501,7 +501,7 @@ User sends WhatsApp message
 ### 1. WhatsApp Agent (Default)
 - Network: Full outbound to WhatsApp servers
 - Process: No subprocess spawning
-- Commands: Via Sentra REPL policy
+- Commands: Via Execwall REPL policy
 
 ### 2. Telegram Agent
 ```yaml
@@ -547,14 +547,14 @@ browser_agent:
 | `src/seccomp_profile.rs` | New module for profile parsing |
 | `src/lib.rs` | Export seccomp_profile module |
 | `src/bin/openclaw_launcher.rs` | Read profiles from YAML, apply dynamically |
-| `/usr/local/bin/sentra-shell` | Wrapper script for REPL integration |
+| `/usr/local/bin/execwall-shell` | Wrapper script for REPL integration |
 | `Cargo.toml` | Already has libseccomp dependency |
 
 ## Testing Plan
 
 1. **Unit Tests:** Profile parsing and inheritance
 2. **Integration:** Launch with each profile, verify syscalls blocked
-3. **E2E:** WhatsApp message → AI response → command execution → Sentra enforcement
+3. **E2E:** WhatsApp message → AI response → command execution → Execwall enforcement
 
 ## Questions to Resolve
 

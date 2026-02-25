@@ -150,7 +150,7 @@ fn read_request_from_stdin() -> Result<SandboxRequest, Box<dyn std::error::Error
 /// Apply namespace isolation (Linux only)
 #[cfg(target_os = "linux")]
 fn apply_namespace_isolation(request: &SandboxRequest) -> Result<(), Box<dyn std::error::Error>> {
-    use sentra::namespace::{NamespaceBuilder, NamespaceConfig};
+    use execwall::namespace::{NamespaceBuilder, NamespaceConfig};
 
     // Create namespace configuration
     let ns_config = NamespaceConfig {
@@ -258,7 +258,7 @@ fn execute_python(request: &SandboxRequest) -> Result<SandboxResponse, Box<dyn s
 
     // Write code to a temporary file
     let temp_dir = std::env::temp_dir();
-    let code_file = temp_dir.join(format!("sentra_exec_{}.py", std::process::id()));
+    let code_file = temp_dir.join(format!("execwall_exec_{}.py", std::process::id()));
     std::fs::write(&code_file, &request.code)?;
 
     // Build Python command

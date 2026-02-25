@@ -1,17 +1,17 @@
 #!/bin/bash
-# Sentra Easy Installer
+# Execwall Easy Installer
 # Universal Execution Governance Gateway
 #
 # This script installs:
-#   - sentra binary (main REPL/API server)
+#   - execwall binary (main REPL/API server)
 #   - python_runner binary (sandbox executor)
 #   - Default policy and sandbox profiles
 #   - Optional systemd service for API mode
 
 set -e
 
-SENTRA_VERSION="${SENTRA_VERSION:-latest}"
-GITHUB_REPO="sundarsub/sentra"
+EXECWALL_VERSION="${EXECWALL_VERSION:-latest}"
+GITHUB_REPO="sundarsub/execwall"
 INSTALL_SYSTEMD="${INSTALL_SYSTEMD:-false}"
 
 # Colors for output
@@ -24,7 +24,7 @@ NC='\033[0m' # No Color
 print_banner() {
     echo -e "${CYAN}"
     echo "╔══════════════════════════════════════════════════════════╗"
-    echo "║              Sentra - Execution Governance               ║"
+    echo "║              Execwall - Execution Governance               ║"
     echo "║         Universal Shell with Policy Enforcement          ║"
     echo "╚══════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
@@ -43,7 +43,7 @@ log_error() {
 }
 
 print_banner
-echo "Installing Sentra..."
+echo "Installing Execwall..."
 echo ""
 
 # Detect OS and architecture
@@ -52,16 +52,16 @@ ARCH=$(uname -m)
 
 if [ "$OS" = "darwin" ]; then
     if [ "$ARCH" = "arm64" ]; then
-        ASSET="sentra-macos-aarch64.tar.gz"
+        ASSET="execwall-macos-aarch64.tar.gz"
     else
-        ASSET="sentra-macos-x86_64.tar.gz"
+        ASSET="execwall-macos-x86_64.tar.gz"
     fi
     PLATFORM_INFO="macOS"
 elif [ "$OS" = "linux" ]; then
     if [ "$ARCH" = "aarch64" ]; then
-        ASSET="sentra-linux-aarch64.tar.gz"
+        ASSET="execwall-linux-aarch64.tar.gz"
     else
-        ASSET="sentra-linux-x86_64.tar.gz"
+        ASSET="execwall-linux-x86_64.tar.gz"
     fi
     PLATFORM_INFO="Linux (full sandbox support)"
 else
@@ -75,56 +75,56 @@ echo ""
 
 # Download and extract binaries
 cd /tmp
-rm -rf /tmp/sentra-install-tmp
-mkdir -p /tmp/sentra-install-tmp
-cd /tmp/sentra-install-tmp
+rm -rf /tmp/execwall-install-tmp
+mkdir -p /tmp/execwall-install-tmp
+cd /tmp/execwall-install-tmp
 
-if [ "$SENTRA_VERSION" = "latest" ]; then
+if [ "$EXECWALL_VERSION" = "latest" ]; then
     DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/latest/download/$ASSET"
 else
-    DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/v${SENTRA_VERSION}/$ASSET"
+    DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/v${EXECWALL_VERSION}/$ASSET"
 fi
 
 curl -sL "$DOWNLOAD_URL" | tar xz
 
-# Install main sentra binary
-sudo mv /tmp/sentra-install-tmp/sentra /usr/local/bin/
-log_info "Installed sentra to /usr/local/bin/sentra"
+# Install main execwall binary
+sudo mv /tmp/execwall-install-tmp/execwall /usr/local/bin/
+log_info "Installed execwall to /usr/local/bin/execwall"
 
 # Install python_runner binary (for sandbox execution)
-if [ -f /tmp/sentra-install-tmp/python_runner ]; then
-    sudo mkdir -p /usr/lib/sentra
-    sudo mv /tmp/sentra-install-tmp/python_runner /usr/lib/sentra/
-    sudo chmod 755 /usr/lib/sentra/python_runner
-    log_info "Installed python_runner to /usr/lib/sentra/python_runner"
+if [ -f /tmp/execwall-install-tmp/python_runner ]; then
+    sudo mkdir -p /usr/lib/execwall
+    sudo mv /tmp/execwall-install-tmp/python_runner /usr/lib/execwall/
+    sudo chmod 755 /usr/lib/execwall/python_runner
+    log_info "Installed python_runner to /usr/lib/execwall/python_runner"
 else
     log_warn "python_runner not found in release (sandbox features limited)"
 fi
 
 # Install openclaw_launcher binary (for seccomp-locked AI agent execution)
-if [ -f /tmp/sentra-install-tmp/openclaw_launcher ]; then
-    sudo mv /tmp/sentra-install-tmp/openclaw_launcher /usr/local/bin/
+if [ -f /tmp/execwall-install-tmp/openclaw_launcher ]; then
+    sudo mv /tmp/execwall-install-tmp/openclaw_launcher /usr/local/bin/
     sudo chmod 755 /usr/local/bin/openclaw_launcher
     log_info "Installed openclaw_launcher to /usr/local/bin/openclaw_launcher"
 else
     log_warn "openclaw_launcher not found in release (AI agent lockdown not available)"
 fi
 
-rm -rf /tmp/sentra-install-tmp
+rm -rf /tmp/execwall-install-tmp
 
 # Create configuration directories
 echo ""
 echo "Setting up configuration directories..."
-sudo mkdir -p /etc/sentra
-sudo mkdir -p /etc/sentra/profiles
-sudo mkdir -p /var/log/sentra
+sudo mkdir -p /etc/execwall
+sudo mkdir -p /etc/execwall/profiles
+sudo mkdir -p /var/log/execwall
 
 # Download default policy
 sudo curl -sL "https://raw.githubusercontent.com/${GITHUB_REPO}/main/policy.yaml" \
-    -o /etc/sentra/policy.yaml 2>/dev/null || {
+    -o /etc/execwall/policy.yaml 2>/dev/null || {
     log_warn "Could not download default policy, creating minimal policy"
-    sudo tee /etc/sentra/policy.yaml > /dev/null << 'POLICY_EOF'
-# Sentra Default Policy
+    sudo tee /etc/execwall/policy.yaml > /dev/null << 'POLICY_EOF'
+# Execwall Default Policy
 version: "2.0"
 mode: enforce
 default: deny
@@ -146,7 +146,7 @@ rules:
     reason: "Privilege escalation blocked"
 POLICY_EOF
 }
-log_info "Installed default policy to /etc/sentra/policy.yaml"
+log_info "Installed default policy to /etc/execwall/policy.yaml"
 
 # Download sandbox profiles
 echo ""
@@ -154,10 +154,10 @@ echo "Downloading sandbox profiles..."
 
 # Python sandbox profile v1
 sudo curl -sL "https://raw.githubusercontent.com/${GITHUB_REPO}/main/profiles/python_sandbox_v1.yaml" \
-    -o /etc/sentra/profiles/python_sandbox_v1.yaml 2>/dev/null || {
-    sudo tee /etc/sentra/profiles/python_sandbox_v1.yaml > /dev/null << 'PROFILE_EOF'
+    -o /etc/execwall/profiles/python_sandbox_v1.yaml 2>/dev/null || {
+    sudo tee /etc/execwall/profiles/python_sandbox_v1.yaml > /dev/null << 'PROFILE_EOF'
 # Python Sandbox Profile v1 - Secure by Default
-runner: "/usr/lib/sentra/python_runner"
+runner: "/usr/lib/execwall/python_runner"
 python_bin: "/usr/bin/python3"
 deny_spawn_processes: true
 default_network: deny
@@ -189,9 +189,9 @@ PROFILE_EOF
 log_info "Installed python_sandbox_v1.yaml profile"
 
 # Python sandbox profile v2 (more permissive for data science)
-sudo tee /etc/sentra/profiles/python_data_science_v1.yaml > /dev/null << 'DS_PROFILE_EOF'
+sudo tee /etc/execwall/profiles/python_data_science_v1.yaml > /dev/null << 'DS_PROFILE_EOF'
 # Python Data Science Profile - For numpy/pandas workloads
-runner: "/usr/lib/sentra/python_runner"
+runner: "/usr/lib/execwall/python_runner"
 python_bin: "/usr/bin/python3"
 deny_spawn_processes: true
 default_network: deny
@@ -224,22 +224,22 @@ DS_PROFILE_EOF
 log_info "Installed python_data_science_v1.yaml profile"
 
 # Set permissions
-sudo chmod 644 /etc/sentra/policy.yaml
-sudo chmod 644 /etc/sentra/profiles/*.yaml
-sudo chmod 755 /var/log/sentra
+sudo chmod 644 /etc/execwall/policy.yaml
+sudo chmod 644 /etc/execwall/profiles/*.yaml
+sudo chmod 755 /var/log/execwall
 
-# Linux-specific: Create sentra cgroup for resource limits
+# Linux-specific: Create execwall cgroup for resource limits
 if [ "$OS" = "linux" ]; then
     echo ""
     echo "Setting up Linux-specific features..."
 
     # Create cgroup directory if cgroups v2 is available
     if [ -d "/sys/fs/cgroup" ] && [ -f "/sys/fs/cgroup/cgroup.controllers" ]; then
-        sudo mkdir -p /sys/fs/cgroup/sentra 2>/dev/null || true
-        if [ -d "/sys/fs/cgroup/sentra" ]; then
-            # Enable controllers for sentra cgroup
-            echo "+cpu +memory +pids" | sudo tee /sys/fs/cgroup/sentra/cgroup.subtree_control > /dev/null 2>&1 || true
-            log_info "Created sentra cgroup for resource limits"
+        sudo mkdir -p /sys/fs/cgroup/execwall 2>/dev/null || true
+        if [ -d "/sys/fs/cgroup/execwall" ]; then
+            # Enable controllers for execwall cgroup
+            echo "+cpu +memory +pids" | sudo tee /sys/fs/cgroup/execwall/cgroup.subtree_control > /dev/null 2>&1 || true
+            log_info "Created execwall cgroup for resource limits"
         fi
     else
         log_warn "Cgroups v2 not available, resource limits will be limited"
@@ -251,17 +251,17 @@ if [ "$INSTALL_SYSTEMD" = "true" ] && [ "$OS" = "linux" ] && command -v systemct
     echo ""
     echo "Installing systemd service for API mode..."
 
-    sudo tee /etc/systemd/system/sentra-api.service > /dev/null << 'SYSTEMD_EOF'
+    sudo tee /etc/systemd/system/execwall-api.service > /dev/null << 'SYSTEMD_EOF'
 [Unit]
-Description=Sentra Execution Governance API Server
-Documentation=https://github.com/sundarsub/sentra
+Description=Execwall Execution Governance API Server
+Documentation=https://github.com/sundarsub/execwall
 After=network.target
 
 [Service]
 Type=simple
-User=sentra
-Group=sentra
-ExecStart=/usr/local/bin/sentra --api --port 9800 --policy /etc/sentra/policy.yaml --log /var/log/sentra/api_audit.jsonl
+User=execwall
+Group=execwall
+ExecStart=/usr/local/bin/execwall --api --port 9800 --policy /etc/execwall/policy.yaml --log /var/log/execwall/api_audit.jsonl
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -272,22 +272,22 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/var/log/sentra
-ReadOnlyPaths=/etc/sentra
+ReadWritePaths=/var/log/execwall
+ReadOnlyPaths=/etc/execwall
 
 [Install]
 WantedBy=multi-user.target
 SYSTEMD_EOF
 
-    # Create sentra system user if it doesn't exist
-    if ! id "sentra" &>/dev/null; then
-        sudo useradd --system --no-create-home --shell /usr/sbin/nologin sentra 2>/dev/null || true
+    # Create execwall system user if it doesn't exist
+    if ! id "execwall" &>/dev/null; then
+        sudo useradd --system --no-create-home --shell /usr/sbin/nologin execwall 2>/dev/null || true
     fi
 
-    sudo chown -R sentra:sentra /var/log/sentra 2>/dev/null || true
+    sudo chown -R execwall:execwall /var/log/execwall 2>/dev/null || true
     sudo systemctl daemon-reload
-    log_info "Installed sentra-api.service"
-    log_info "Enable with: sudo systemctl enable --now sentra-api"
+    log_info "Installed execwall-api.service"
+    log_info "Enable with: sudo systemctl enable --now execwall-api"
 fi
 
 # Verification step
@@ -295,17 +295,17 @@ echo ""
 echo "Verifying installation..."
 VERIFY_PASSED=true
 
-# Check sentra binary
-if command -v sentra &> /dev/null; then
-    SENTRA_VERSION_OUT=$(sentra --version 2>&1 || echo "unknown")
-    log_info "sentra binary: OK ($SENTRA_VERSION_OUT)"
+# Check execwall binary
+if command -v execwall &> /dev/null; then
+    EXECWALL_VERSION_OUT=$(execwall --version 2>&1 || echo "unknown")
+    log_info "execwall binary: OK ($EXECWALL_VERSION_OUT)"
 else
-    log_error "sentra binary: NOT FOUND"
+    log_error "execwall binary: NOT FOUND"
     VERIFY_PASSED=false
 fi
 
 # Check python_runner
-if [ -x "/usr/lib/sentra/python_runner" ]; then
+if [ -x "/usr/lib/execwall/python_runner" ]; then
     log_info "python_runner: OK"
 else
     log_warn "python_runner: NOT FOUND (sandbox features limited)"
@@ -319,7 +319,7 @@ else
 fi
 
 # Check policy file
-if [ -f "/etc/sentra/policy.yaml" ]; then
+if [ -f "/etc/execwall/policy.yaml" ]; then
     log_info "policy.yaml: OK"
 else
     log_error "policy.yaml: NOT FOUND"
@@ -327,7 +327,7 @@ else
 fi
 
 # Check profiles directory
-PROFILE_COUNT=$(ls -1 /etc/sentra/profiles/*.yaml 2>/dev/null | wc -l)
+PROFILE_COUNT=$(ls -1 /etc/execwall/profiles/*.yaml 2>/dev/null | wc -l)
 if [ "$PROFILE_COUNT" -gt 0 ]; then
     log_info "sandbox profiles: OK ($PROFILE_COUNT profiles)"
 else
@@ -353,22 +353,22 @@ echo ""
 echo -e "${CYAN}Quick Start:${NC}"
 echo ""
 echo "  Interactive REPL mode:"
-echo "    sentra"
+echo "    execwall"
 echo ""
 echo "  With custom policy:"
-echo "    sentra --policy /path/to/policy.yaml"
+echo "    execwall --policy /path/to/policy.yaml"
 echo ""
 if [ "$OS" = "linux" ]; then
 echo "  API mode (for OpenClaw VM integration):"
-echo "    sentra --api --port 9800"
+echo "    execwall --api --port 9800"
 echo ""
 fi
 echo "  View help:"
-echo "    sentra --help"
+echo "    execwall --help"
 echo ""
 echo -e "${CYAN}Configuration Files:${NC}"
-echo "  Policy:   /etc/sentra/policy.yaml"
-echo "  Profiles: /etc/sentra/profiles/"
-echo "  Logs:     /var/log/sentra/"
+echo "  Policy:   /etc/execwall/policy.yaml"
+echo "  Profiles: /etc/execwall/profiles/"
+echo "  Logs:     /var/log/execwall/"
 echo ""
-echo "Run 'sentra' to start!"
+echo "Run 'execwall' to start!"

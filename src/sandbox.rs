@@ -120,7 +120,7 @@ impl SandboxExecutor {
 
         // Write code to temp file (use unique name to avoid race conditions)
         let temp_dir = std::env::temp_dir();
-        let code_path = temp_dir.join(format!("sentra_{}.py", uuid::Uuid::new_v4()));
+        let code_path = temp_dir.join(format!("execwall_{}.py", uuid::Uuid::new_v4()));
         std::fs::write(&code_path, &request.code)?;
 
         // Run Python with timeout support
@@ -207,7 +207,7 @@ impl SandboxExecutor {
 
         // Write code to temp file
         let temp_dir = std::env::temp_dir();
-        let code_path = temp_dir.join(format!("sentra_{}.py", uuid::Uuid::new_v4()));
+        let code_path = temp_dir.join(format!("execwall_{}.py", uuid::Uuid::new_v4()));
         std::fs::write(&code_path, &request.code)?;
 
         // Execute Python with output capture
@@ -315,13 +315,13 @@ mod tests {
 
     #[test]
     fn test_sandbox_executor_new() {
-        let executor = SandboxExecutor::new("/usr/lib/sentra/python_runner");
-        assert_eq!(executor.python_runner_path, "/usr/lib/sentra/python_runner");
+        let executor = SandboxExecutor::new("/usr/lib/execwall/python_runner");
+        assert_eq!(executor.python_runner_path, "/usr/lib/execwall/python_runner");
     }
 
     #[test]
     fn test_simple_execution() {
-        let executor = SandboxExecutor::new("/usr/lib/sentra/python_runner");
+        let executor = SandboxExecutor::new("/usr/lib/execwall/python_runner");
         let mut req = SandboxRequest::default();
         req.code = "print('hello world')".to_string();
         req.cwd = std::env::temp_dir().to_string_lossy().to_string();

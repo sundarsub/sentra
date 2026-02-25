@@ -1,5 +1,5 @@
 """
-Configuration loading for Sentra OpenRouter Adapter.
+Configuration loading for Execwall OpenRouter Adapter.
 
 Loads cost_routing section from policy.yaml with env var substitution.
 """

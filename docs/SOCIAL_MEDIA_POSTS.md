@@ -21,17 +21,17 @@ I built an execution firewall for AI agents that lets you safely run OpenClaw (a
 **The stack:**
 - Oracle Cloud Free Tier (4 ARM CPUs, 24GB RAM, $0/month)
 - OpenClaw (Node.js AI agent framework)
-- Sentra (Rust execution firewall with seccomp)
+- Execwall (Rust execution firewall with seccomp)
 - Your choice of LLM (Gemini, GPT-4, Claude via OpenRouter)
 
 **Quick install:**
 ```bash
-curl -sSL https://raw.githubusercontent.com/sundarsub/sentra/main/scripts/install-oracle-cloud.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/sundarsub/execwall/main/scripts/install-oracle-cloud.sh | sudo bash
 ```
 
 **Links:**
-- GitHub: https://github.com/sundarsub/sentra
-- Deployment Guide: https://github.com/sundarsub/sentra/blob/main/docs/ORACLE_CLOUD_DEPLOYMENT.md
+- GitHub: https://github.com/sundarsub/execwall
+- Deployment Guide: https://github.com/sundarsub/execwall/blob/main/docs/ORACLE_CLOUD_DEPLOYMENT.md
 
 Open source (Apache-2.0). Would love feedback!
 
@@ -53,16 +53,16 @@ Built an execution firewall for AI agents using Linux seccomp and namespaces. Ru
 
 **Example denied commands:**
 ```
-[sentra:enforce]$ rm -rf /
+[execwall:enforce]$ rm -rf /
 [X] DENIED: Recursive deletion blocked
 
-[sentra:enforce]$ sudo su
+[execwall:enforce]$ sudo su
 [X] DENIED: Privilege escalation blocked
 ```
 
 Running on Oracle Free Tier ARM instance (4 CPU, 24GB RAM). Total cost: $0/month.
 
-GitHub: https://github.com/sundarsub/sentra
+GitHub: https://github.com/sundarsub/execwall
 
 ---
 
@@ -72,7 +72,7 @@ GitHub: https://github.com/sundarsub/sentra
 
 **Body:**
 
-Released Sentra, an execution firewall designed specifically for AI agents that can execute code.
+Released Execwall, an execution firewall designed specifically for AI agents that can execute code.
 
 **Problem:** LLM-powered agents (like AutoGPT, OpenClaw, etc.) need to run code, but giving an AI unrestricted shell access is dangerous.
 
@@ -89,14 +89,14 @@ Released Sentra, an execution firewall designed specifically for AI agents that 
 
 **Architecture:**
 ```
-AI Agent → Sentra Firewall → Kernel
+AI Agent → Execwall Firewall → Kernel
               ↓
     Seccomp + Policy + Sandbox
 ```
 
 Works with any LLM backend (OpenAI, Anthropic, Gemini, local models via OpenRouter).
 
-GitHub: https://github.com/sundarsub/sentra
+GitHub: https://github.com/sundarsub/execwall
 Paper-style docs coming soon.
 
 ---
@@ -116,7 +116,7 @@ Guide to deploying a secure AI assistant (with WhatsApp integration) on Oracle C
 - **Cost: $0/month** (always free tier)
 
 **The stack:**
-- Sentra execution firewall (Rust, seccomp-based)
+- Execwall execution firewall (Rust, seccomp-based)
 - OpenClaw AI agent (Node.js)
 - WhatsApp Web integration
 - Your choice of LLM API
@@ -124,13 +124,13 @@ Guide to deploying a secure AI assistant (with WhatsApp integration) on Oracle C
 **Installation:**
 ```bash
 # One-line install
-curl -sSL https://raw.githubusercontent.com/sundarsub/sentra/main/scripts/install-oracle-cloud.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/sundarsub/execwall/main/scripts/install-oracle-cloud.sh | sudo bash
 
 # Start with security
 openclaw_launcher --seccomp-profile gateway -- gateway
 ```
 
-Full guide: https://github.com/sundarsub/sentra/blob/main/docs/ORACLE_CLOUD_DEPLOYMENT.md
+Full guide: https://github.com/sundarsub/execwall/blob/main/docs/ORACLE_CLOUD_DEPLOYMENT.md
 
 ---
 
@@ -153,7 +153,7 @@ If you're running local LLMs that generate code, you might want a sandbox. Built
 - Reading/writing to specific directories
 - API calls to approved endpoints
 
-Works with any LLM backend - just point your agent at the Sentra API instead of running code directly.
+Works with any LLM backend - just point your agent at the Execwall API instead of running code directly.
 
 Example with OpenClaw:
 ```bash
@@ -164,7 +164,7 @@ Example with OpenClaw:
 {"stdout": "4\n", "exit_code": 0}
 ```
 
-GitHub: https://github.com/sundarsub/sentra
+GitHub: https://github.com/sundarsub/execwall
 
 ---
 
@@ -174,7 +174,7 @@ GitHub: https://github.com/sundarsub/sentra
 
 **Body:**
 
-I built Sentra, an execution firewall for AI agents. It sits between your AI and the OS, ensuring only approved commands run.
+I built Execwall, an execution firewall for AI agents. It sits between your AI and the OS, ensuring only approved commands run.
 
 Key features:
 - Seccomp-BPF syscall filtering at kernel level
@@ -184,16 +184,16 @@ Key features:
 
 Use case: Running a WhatsApp AI assistant on Oracle Cloud Free Tier. The AI can execute Python code, but the firewall ensures it can't escape the sandbox.
 
-Demo: https://github.com/sundarsub/sentra/blob/main/docs/ORACLE_CLOUD_DEPLOYMENT.md
+Demo: https://github.com/sundarsub/execwall/blob/main/docs/ORACLE_CLOUD_DEPLOYMENT.md
 
-GitHub: https://github.com/sundarsub/sentra
+GitHub: https://github.com/sundarsub/execwall
 
 ---
 
 ## Twitter/X
 
 **Post 1:**
-🔒 Released Sentra v2.3.0 - Execution Firewall for AI Agents
+🔒 Released Execwall v2.3.0 - Execution Firewall for AI Agents
 
 Run your own WhatsApp AI assistant on Oracle Cloud Free Tier ($0/month) with enterprise-grade security.
 
@@ -201,7 +201,7 @@ Run your own WhatsApp AI assistant on Oracle Cloud Free Tier ($0/month) with ent
 ✅ Policy-based command governance
 ✅ Python sandbox isolation
 
-GitHub: https://github.com/sundarsub/sentra
+GitHub: https://github.com/sundarsub/execwall
 
 **Post 2:**
 The problem with AI agents that can execute code: they might execute `rm -rf /`
@@ -210,10 +210,10 @@ The solution: An execution firewall that blocks dangerous commands before they r
 
 Built with Rust + seccomp + Linux namespaces.
 
-https://github.com/sundarsub/sentra
+https://github.com/sundarsub/execwall
 
 **Post 3:**
-Oracle Cloud Free Tier + OpenClaw + Sentra =
+Oracle Cloud Free Tier + OpenClaw + Execwall =
 
 🤖 Your own AI WhatsApp assistant
 🔒 Seccomp-locked security
@@ -234,7 +234,7 @@ curl -sSL https://raw.githubusercontent.com/.../install-oracle-cloud.sh | sudo b
 
 As AI agents become more capable, they're increasingly given the ability to execute code. This creates a significant security challenge: how do you let an AI run code without risking your entire system?
 
-I've released Sentra, an open-source execution firewall designed specifically for AI agents. Here's how it works:
+I've released Execwall, an open-source execution firewall designed specifically for AI agents. Here's how it works:
 
 **Layer 1: Seccomp-BPF**
 Linux's secure computing mode filters syscalls at the kernel level. Even if malicious code runs, it cannot call fork(), exec(), or other dangerous operations.
@@ -252,6 +252,6 @@ The result: AI agents can safely execute code within well-defined boundaries.
 
 Currently running this on Oracle Cloud Free Tier with an AI-powered WhatsApp assistant. Total cost: $0/month.
 
-Open source: https://github.com/sundarsub/sentra
+Open source: https://github.com/sundarsub/execwall
 
 #AIEngineering #Security #OpenSource #CloudComputing

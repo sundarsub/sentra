@@ -1,5 +1,5 @@
 """
-Sentra OR Gate - Budget-based Model Routing for OpenRouter
+Execwall OR Gate - Budget-based Model Routing for OpenRouter
 
 OpenAI-compatible proxy that routes requests to OpenRouter
 with budget-based model selection.
@@ -13,7 +13,7 @@ Endpoints:
     POST /api/reset/{agent_id}  - Reset spend for agent
 
 Usage:
-    python -m sentra-or-gate.main
+    python -m execwall-or-gate.main
 """
 
 import os
@@ -30,7 +30,7 @@ from .spend import SpendTracker
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Sentra OR Gate",
+    title="Execwall OR Gate",
     description="Budget-based model routing for OpenRouter",
     version="0.1.0",
 )
@@ -45,7 +45,7 @@ async def health():
     """Health check endpoint."""
     return {
         "status": "ok",
-        "service": "sentra-or-gate",
+        "service": "execwall-or-gate",
         "agents": list(config.agents.keys()),
         "openrouter_url": config.openrouter.base_url,
     }
@@ -143,7 +143,7 @@ async def chat_completions(
         Authorization: Passed through to OpenRouter if no API key configured
 
     Request body is forwarded to OpenRouter with modified model selection.
-    Response includes _sentra metadata with spend info.
+    Response includes _execwall metadata with spend info.
     """
     body = await request.json()
     agent_id = x_agent_id or "default"
@@ -204,8 +204,8 @@ async def chat_completions(
                 json=body,
                 headers={
                     "Authorization": f"Bearer {api_key}",
-                    "HTTP-Referer": "https://sentra.dev",
-                    "X-Title": "Sentra OR Gate",
+                    "HTTP-Referer": "https://execwall.dev",
+                    "X-Title": "Execwall OR Gate",
                     "Content-Type": "application/json",
                 },
             )
@@ -248,8 +248,8 @@ async def chat_completions(
             request_id=result.get("id"),
         )
 
-    # Add Sentra metadata to response
-    result["_sentra"] = {
+    # Add Execwall metadata to response
+    result["_execwall"] = {
         "agent_id": agent_id,
         "cost": round(cost, 6),
         "budget_remaining": round(agent.budget_total - agent.budget_spent - cost, 6),
@@ -267,7 +267,7 @@ def main():
 
     print(f"""
 ╔═══════════════════════════════════════════════════════════════╗
-║                    SENTRA OR GATE                             ║
+║                    EXECWALL OR GATE                             ║
 ║           Budget-based Routing for OpenRouter                 ║
 ╠═══════════════════════════════════════════════════════════════╣
 ║  Endpoint: http://{host}:{port}/v1/chat/completions{' ' * (16 - len(str(port)))}║

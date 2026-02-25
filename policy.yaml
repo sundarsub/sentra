@@ -1,6 +1,6 @@
-# Sentra - Execution Governance Policy
+# Execwall - Execution Governance Policy
 # =====================================
-# This policy file defines rules for the Sentra execution gateway.
+# This policy file defines rules for the Execwall execution gateway.
 # Rules are evaluated in order - first match wins.
 #
 # Version: 2.0
@@ -244,7 +244,7 @@ seccomp_profiles:
       - recvmsg
 
     network_policy:
-      allow_loopback: true   # Still allow Sentra API
+      allow_loopback: true   # Still allow Execwall API
       allow_outbound: []
 
   # Development Profile - permissive for testing
@@ -268,13 +268,13 @@ launcher:
   # Use 'whatsapp_agent' or 'isolated_agent' for sandboxed code execution
   default_profile: gateway
 
-  # Sentra integration
-  sentra:
+  # Execwall integration
+  execwall:
     enabled: true
     mode: repl                              # repl | api
-    binary: /usr/local/bin/sentra
-    shell_wrapper: /usr/local/bin/sentra-shell
-    python_runner: /usr/lib/sentra/python_runner
+    binary: /usr/local/bin/execwall
+    shell_wrapper: /usr/local/bin/execwall-shell
+    python_runner: /usr/lib/execwall/python_runner
 
   # OpenClaw settings
   openclaw:
@@ -288,7 +288,7 @@ launcher:
 
 profiles:
   python_sandbox:
-    runner: "/usr/lib/sentra/python_runner"
+    runner: "/usr/lib/execwall/python_runner"
     python_bin: "/usr/bin/python3"
     deny_spawn_processes: true
     default_network: deny
@@ -303,7 +303,7 @@ profiles:
       write_allow:
         - "/work/tmp"
         - "/work/out"
-        - "/tmp/sentra"
+        - "/tmp/execwall"
       protected_deny:
         - "/"
         - "/etc"
@@ -322,7 +322,7 @@ profiles:
     syscall_profile: python_restricted
 
   python_sandbox_extended:
-    runner: "/usr/lib/sentra/python_runner"
+    runner: "/usr/lib/execwall/python_runner"
     python_bin: "/usr/bin/python3"
     deny_spawn_processes: false
     default_network: deny
@@ -337,7 +337,7 @@ profiles:
         - "/usr/share"
       write_allow:
         - "/work"
-        - "/tmp/sentra"
+        - "/tmp/execwall"
       protected_deny:
         - "/etc/passwd"
         - "/etc/shadow"
@@ -934,7 +934,7 @@ rules:
     match:
       executable: "^(python|python3|python2)$"
     effect: deny
-    reason: "Direct Python execution blocked - use Sentra sandbox API for Python code"
+    reason: "Direct Python execution blocked - use Execwall sandbox API for Python code"
 
   - id: allow_python_runner
     match:
@@ -1123,15 +1123,15 @@ rules:
     effect: deny
     reason: "GitHub write operations need manual review"
 
-  # Allow sentra commands
-  - id: allow_sentra
+  # Allow execwall commands
+  - id: allow_execwall
     match:
-      executable: "sentra$"
+      executable: "execwall$"
     effect: allow
 
   # Allow OpenClaw to check its own processes
   - id: openclaw_process_check
     match:
       executable: "^(pgrep|ps)$"
-      args_pattern: "(openclaw|sentra|python_runner)"
+      args_pattern: "(openclaw|execwall|python_runner)"
     effect: allow

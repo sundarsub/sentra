@@ -1,21 +1,21 @@
 [package]
-name = "sentra"
-version = "2.2.2"
+name = "execwall"
+version = "3.0.0"
 edition = "2021"
-description = "Sentra - Universal Execution Governance Gateway"
+description = "Execwall - Execution Firewall for AI Agents"
 authors = ["Sundar Subramaniam"]
 license = "Apache-2.0"
-repository = "https://github.com/sundarsubramaniam/sentra"
-keywords = ["security", "shell", "policy", "governance", "audit"]
+repository = "https://github.com/sundarsub/execwall"
+keywords = ["security", "shell", "policy", "governance", "audit", "sandbox", "ai-agent"]
 categories = ["command-line-utilities", "development-tools"]
 readme = "README.md"
 
 [lib]
-name = "sentra"
+name = "execwall"
 path = "src/lib.rs"
 
 [[bin]]
-name = "sentra"
+name = "execwall"
 path = "src/main.rs"
 
 [[bin]]

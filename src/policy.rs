@@ -610,7 +610,7 @@ default: deny
 
 profiles:
   python_sandbox_v1:
-    runner: "/usr/lib/sentra/python_runner"
+    runner: "/usr/lib/execwall/python_runner"
     python_bin: "/usr/bin/python3"
     deny_spawn_processes: true
     default_network: deny

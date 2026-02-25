@@ -5,9 +5,9 @@
 //!
 //! Security flow:
 //! 1. Load seccomp profile from policy.yaml
-//! 2. Optionally start Sentra (API or REPL mode)
+//! 2. Optionally start Execwall (API or REPL mode)
 //! 3. Apply seccomp filter based on selected profile
-//! 4. Set SHELL to sentra-shell for command governance
+//! 4. Set SHELL to execwall-shell for command governance
 //! 5. Exec OpenClaw binary (this is the LAST exec before seccomp locks)
 //!
 //! After step 5, the OpenClaw process CANNOT:
@@ -15,7 +15,7 @@
 //! - Fork new processes
 //! - Execute dangerous syscalls (ptrace, mount, etc.)
 //!
-//! Commands executed by OpenClaw go through the SHELL (Sentra REPL) for
+//! Commands executed by OpenClaw go through the SHELL (Execwall REPL) for
 //! policy enforcement.
 
 use std::net::TcpStream;
@@ -24,7 +24,7 @@ use std::thread;
 use std::time::Duration;
 
 use clap::Parser;
-use sentra::seccomp_profile::{
+use execwall::seccomp_profile::{
     apply_seccomp_profile, load_from_policy, PolicySeccompConfig, SeccompProfile,
 };
 
@@ -39,12 +39,12 @@ struct Args {
     #[arg(short, long, default_value = "/usr/local/bin/openclaw")]
     openclaw_bin: String,
 
-    /// Path to the Sentra binary
-    #[arg(short, long, default_value = "/usr/local/bin/sentra")]
-    sentra_bin: String,
+    /// Path to the Execwall binary
+    #[arg(short, long, default_value = "/usr/local/bin/execwall")]
+    execwall_bin: String,
 
     /// Path to policy.yaml file
-    #[arg(long, default_value = "/etc/sentra/policy.yaml")]
+    #[arg(long, default_value = "/etc/execwall/policy.yaml")]
     policy: String,
 
     /// Seccomp profile to apply (from policy.yaml seccomp_profiles section)
@@ -53,31 +53,31 @@ struct Args {
     #[arg(long, default_value = "gateway")]
     seccomp_profile: String,
 
-    /// Sentra API port (used when --sentra-api is set)
+    /// Execwall API port (used when --execwall-api is set)
     #[arg(short, long, default_value = "9999")]
     port: u16,
 
-    /// Path to python_runner binary (for Sentra)
-    #[arg(long, default_value = "/usr/lib/sentra/python_runner")]
+    /// Path to python_runner binary (for Execwall)
+    #[arg(long, default_value = "/usr/lib/execwall/python_runner")]
     python_runner: String,
 
-    /// Path to sentra-shell wrapper script
-    #[arg(long, default_value = "/usr/local/bin/sentra-shell")]
-    sentra_shell: String,
+    /// Path to execwall-shell wrapper script
+    #[arg(long, default_value = "/usr/local/bin/execwall-shell")]
+    execwall_shell: String,
 
-    /// Use Sentra REPL mode (commands via SHELL env var)
+    /// Use Execwall REPL mode (commands via SHELL env var)
     /// This is the default and recommended mode
     #[arg(long, default_value = "true")]
-    sentra_repl: bool,
+    execwall_repl: bool,
 
-    /// Use Sentra API mode instead of REPL
-    /// When set, starts Sentra API server and waits for it
+    /// Use Execwall API mode instead of REPL
+    /// When set, starts Execwall API server and waits for it
     #[arg(long)]
-    sentra_api: bool,
+    execwall_api: bool,
 
-    /// Skip starting Sentra entirely (if already running or not needed)
+    /// Skip starting Execwall entirely (if already running or not needed)
     #[arg(long)]
-    skip_sentra: bool,
+    skip_execwall: bool,
 
     /// Verbose output
     #[arg(short, long)]
@@ -173,31 +173,31 @@ fn main() {
         }
     };
 
-    // Step 1: Handle Sentra startup based on mode
-    if args.sentra_api && !args.skip_sentra {
-        // API mode: start Sentra API server
-        if let Err(e) = start_sentra_api_server(&args) {
-            eprintln!("ERROR: Failed to start Sentra API: {}", e);
+    // Step 1: Handle Execwall startup based on mode
+    if args.execwall_api && !args.skip_execwall {
+        // API mode: start Execwall API server
+        if let Err(e) = start_execwall_api_server(&args) {
+            eprintln!("ERROR: Failed to start Execwall API: {}", e);
             std::process::exit(1);
         }
 
-        // Wait for Sentra API to be ready
-        println!("→ Waiting for Sentra API on port {}...", args.port);
-        if !wait_for_sentra(args.port, Duration::from_secs(10)) {
-            eprintln!("ERROR: Sentra API not responding on port {}", args.port);
+        // Wait for Execwall API to be ready
+        println!("→ Waiting for Execwall API on port {}...", args.port);
+        if !wait_for_execwall(args.port, Duration::from_secs(10)) {
+            eprintln!("ERROR: Execwall API not responding on port {}", args.port);
             std::process::exit(1);
         }
-        println!("✓ Sentra API ready");
-    } else if args.sentra_repl && !args.skip_sentra {
-        // REPL mode: verify sentra-shell exists
-        if !std::path::Path::new(&args.sentra_shell).exists() {
-            eprintln!("ERROR: sentra-shell not found at: {}", args.sentra_shell);
-            eprintln!("Create it or specify path with --sentra-shell");
+        println!("✓ Execwall API ready");
+    } else if args.execwall_repl && !args.skip_execwall {
+        // REPL mode: verify execwall-shell exists
+        if !std::path::Path::new(&args.execwall_shell).exists() {
+            eprintln!("ERROR: execwall-shell not found at: {}", args.execwall_shell);
+            eprintln!("Create it or specify path with --execwall-shell");
             std::process::exit(1);
         }
-        println!("→ Sentra REPL mode: SHELL={}", args.sentra_shell);
-    } else if args.skip_sentra {
-        println!("→ Skipping Sentra (--skip-sentra)");
+        println!("→ Execwall REPL mode: SHELL={}", args.execwall_shell);
+    } else if args.skip_execwall {
+        println!("→ Skipping Execwall (--skip-execwall)");
     }
 
     // Step 2: Apply seccomp filter (Linux only, unless --no-seccomp)
@@ -244,20 +244,20 @@ fn main() {
     }
 
     // Step 3: Set environment variables
-    if args.sentra_repl && !args.skip_sentra {
-        std::env::set_var("SHELL", &args.sentra_shell);
+    if args.execwall_repl && !args.skip_execwall {
+        std::env::set_var("SHELL", &args.execwall_shell);
         std::env::set_var("SENTRA_POLICY", &args.policy);
         std::env::set_var("PYTHON_RUNNER", &args.python_runner);
-        println!("→ Set SHELL={}", args.sentra_shell);
+        println!("→ Set SHELL={}", args.execwall_shell);
     }
 
     // Step 4: Print security status
     println!();
     println!("═══════════════════════════════════════════════════════════");
-    if args.sentra_repl {
-        println!("  SECCOMP LOCKED - Commands via Sentra REPL             ");
-    } else if args.sentra_api {
-        println!("  SECCOMP LOCKED - Code execution via Sentra API        ");
+    if args.execwall_repl {
+        println!("  SECCOMP LOCKED - Commands via Execwall REPL             ");
+    } else if args.execwall_api {
+        println!("  SECCOMP LOCKED - Code execution via Execwall API        ");
         println!("  API endpoint: 127.0.0.1:{}", args.port);
     } else {
         println!("  SECCOMP LOCKED - Limited system access                ");
@@ -270,18 +270,18 @@ fn main() {
     exec_openclaw(&args.openclaw_bin, &args.openclaw_args);
 }
 
-/// Start Sentra API server in background
-fn start_sentra_api_server(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
-    println!("→ Starting Sentra API server on port {}...", args.port);
+/// Start Execwall API server in background
+fn start_execwall_api_server(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
+    println!("→ Starting Execwall API server on port {}...", args.port);
 
-    // Check if Sentra is already running
+    // Check if Execwall is already running
     if TcpStream::connect(format!("127.0.0.1:{}", args.port)).is_ok() {
-        println!("✓ Sentra already running on port {}", args.port);
+        println!("✓ Execwall already running on port {}", args.port);
         return Ok(());
     }
 
-    // Start Sentra in background
-    let mut cmd = Command::new(&args.sentra_bin);
+    // Start Execwall in background
+    let mut cmd = Command::new(&args.execwall_bin);
     cmd.arg("--api")
         .arg("--port")
         .arg(args.port.to_string())
@@ -295,7 +295,7 @@ fn start_sentra_api_server(args: &Args) -> Result<(), Box<dyn std::error::Error>
 
     // Spawn as detached process
     let child = cmd.spawn()?;
-    println!("✓ Sentra started (PID: {})", child.id());
+    println!("✓ Execwall started (PID: {})", child.id());
 
     // Give it time to start
     thread::sleep(Duration::from_millis(500));
@@ -303,8 +303,8 @@ fn start_sentra_api_server(args: &Args) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-/// Wait for Sentra API to be ready
-fn wait_for_sentra(port: u16, timeout: Duration) -> bool {
+/// Wait for Execwall API to be ready
+fn wait_for_execwall(port: u16, timeout: Duration) -> bool {
     let start = std::time::Instant::now();
     let addr = format!("127.0.0.1:{}", port);
 
@@ -462,14 +462,14 @@ mod tests {
             "openclaw_launcher",
             "--port",
             "9999",
-            "--skip-sentra",
+            "--skip-execwall",
             "--seccomp-profile",
             "whatsapp_agent",
         ]);
         assert!(args.is_ok());
         let args = args.unwrap();
         assert_eq!(args.port, 9999);
-        assert!(args.skip_sentra);
+        assert!(args.skip_execwall);
         assert_eq!(args.seccomp_profile, "whatsapp_agent");
     }
 
@@ -478,10 +478,10 @@ mod tests {
         let args = Args::try_parse_from(&["openclaw_launcher"]).unwrap();
         assert_eq!(args.port, 9999);
         assert_eq!(args.openclaw_bin, "/usr/local/bin/openclaw");
-        assert_eq!(args.sentra_bin, "/usr/local/bin/sentra");
+        assert_eq!(args.execwall_bin, "/usr/local/bin/execwall");
         assert_eq!(args.seccomp_profile, "gateway");
-        assert!(args.sentra_repl);
-        assert!(!args.sentra_api);
+        assert!(args.execwall_repl);
+        assert!(!args.execwall_api);
     }
 
     #[test]

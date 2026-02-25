@@ -15,19 +15,19 @@ use std::env;
 use std::process::{Command, Stdio};
 use std::time::Instant;
 
-/// Sentra - Universal Execution Governance Gateway
+/// Execwall - Execution Firewall for AI Agents
 #[derive(Parser, Debug)]
-#[command(name = "sentra")]
+#[command(name = "execwall")]
 #[command(author = "Sundar Subramaniam")]
 #[command(version)]
 #[command(about = "Universal execution governance gateway with argument-level policy enforcement", long_about = None)]
 struct Args {
     /// Path to policy YAML file
-    #[arg(short, long, default_value = "/etc/sentra/policy.yaml")]
+    #[arg(short, long, default_value = "/etc/execwall/policy.yaml")]
     policy: String,
 
     /// Path to audit log file
-    #[arg(short, long, default_value = "/var/log/sentra_audit.jsonl")]
+    #[arg(short, long, default_value = "/var/log/execwall/audit.jsonl")]
     log: String,
 
     /// Override policy mode (enforce or audit)
@@ -55,7 +55,7 @@ struct Args {
     port: u16,
 
     /// Path to python_runner binary (for API mode)
-    #[arg(long, default_value = "/usr/lib/sentra/python_runner")]
+    #[arg(long, default_value = "/usr/lib/execwall/python_runner")]
     python_runner: String,
 }
 
@@ -76,7 +76,7 @@ fn main() {
         );
         println!(
             "{}",
-            "║              Sentra - Execution Governance               ║".cyan()
+            "║              Execwall - Execution Firewall               ║".cyan()
         );
         println!(
             "{}",
@@ -239,7 +239,7 @@ fn main() {
             } else {
                 "enforce".green()
             };
-            format!("[sentra:{}]$ ", mode_indicator)
+            format!("[execwall:{}]$ ", mode_indicator)
         };
 
         match rl.readline(&prompt) {
@@ -258,7 +258,7 @@ fn main() {
                 match input {
                     "exit" | "quit" => {
                         if !args.quiet {
-                            println!("{} Exiting sentra...", "→".cyan());
+                            println!("{} Exiting execwall...", "→".cyan());
                         }
                         break;
                     }
@@ -460,7 +460,7 @@ fn execute_command(command: &str) -> i32 {
 /// Print help message
 fn print_help() {
     println!();
-    println!("{}", "Sentra - Execution Governance Gateway".cyan().bold());
+    println!("{}", "Execwall - Execution Firewall for AI Agents".cyan().bold());
     println!();
     println!("{}", "Built-in Commands:".yellow());
     println!("  {}     Show this help message", "help".cyan());
@@ -491,7 +491,7 @@ fn print_help() {
     println!();
 }
 
-/// Run Sentra in JSON API mode
+/// Run Execwall in JSON API mode
 fn run_api_mode(port: u16, python_runner_path: &str) {
     println!(
         "{}",
@@ -499,7 +499,7 @@ fn run_api_mode(port: u16, python_runner_path: &str) {
     );
     println!(
         "{}",
-        "║              Sentra - JSON API Mode                      ║".cyan()
+        "║              Execwall - JSON API Mode                    ║".cyan()
     );
     println!(
         "{}",

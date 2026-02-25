@@ -37,9 +37,9 @@ impl CgroupLimits {
     }
 }
 
-/// Cgroup root path for sentra
+/// Cgroup root path for execwall
 const CGROUP_ROOT: &str = "/sys/fs/cgroup";
-const SENTRA_CGROUP: &str = "sentra";
+const EXECWALL_CGROUP: &str = "execwall";
 
 /// Controller for a single cgroup execution context
 #[derive(Debug)]
@@ -58,7 +58,7 @@ impl CgroupController {
     pub fn create(name: &str) -> Result<Self, Box<dyn std::error::Error>> {
         use std::fs;
 
-        let path = PathBuf::from(CGROUP_ROOT).join(SENTRA_CGROUP).join(name);
+        let path = PathBuf::from(CGROUP_ROOT).join(EXECWALL_CGROUP).join(name);
 
         // Create the cgroup directory
         fs::create_dir_all(&path)?;

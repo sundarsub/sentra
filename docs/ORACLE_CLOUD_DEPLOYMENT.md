@@ -1,17 +1,17 @@
-# OpenClaw + Sentra - Oracle Cloud Deployment Guide
+# OpenClaw + Execwall - Oracle Cloud Deployment Guide
 
 Deploy a secure AI agent environment on **Oracle Cloud Free Tier** with:
 - **WhatsApp** integration for messaging
 - **Email** support via Himalaya
 - **OpenRouter** LLM (Claude, GPT-4, etc.)
-- **Sentra** command governance
+- **Execwall** command governance
 
 ## Deployment Options
 
 | Mode | Security | Use Case |
 |------|----------|----------|
-| **Standard** (recommended) | Sentra REPL policy enforcement | WhatsApp + Email + OpenRouter |
-| **Seccomp** | Sentra + kernel syscall filtering | High-security environments |
+| **Standard** (recommended) | Execwall REPL policy enforcement | WhatsApp + Email + OpenRouter |
+| **Seccomp** | Execwall + kernel syscall filtering | High-security environments |
 
 This guide covers the **Standard** deployment.
 
@@ -30,12 +30,12 @@ This guide covers the **Standard** deployment.
 │  │  • WhatsApp Web integration                              │  │
 │  │  • LLM API calls (OpenRouter)                           │  │
 │  │  • Email via Himalaya                                    │  │
-│  │  • SHELL=/usr/local/bin/sentra-shell                    │  │
+│  │  • SHELL=/usr/local/bin/execwall-shell                    │  │
 │  └────────────────────────┬────────────────────────────────┘  │
 │                           │                                    │
 │                           ▼                                    │
 │  ┌─────────────────────────────────────────────────────────┐  │
-│  │              sentra-shell (--quiet mode)                 │  │
+│  │              execwall-shell (--quiet mode)                 │  │
 │  │  • Policy-enforced command execution                     │  │
 │  │  • Rate limiting                                         │  │
 │  │  • Audit logging                                         │  │
@@ -43,8 +43,8 @@ This guide covers the **Standard** deployment.
 │  └─────────────────────────────────────────────────────────┘  │
 │                                                                │
 │  Services: openclaw.service (systemd)                          │
-│  Config:   /etc/sentra/policy.yaml                            │
-│  Logs:     /var/log/sentra/audit.jsonl                        │
+│  Config:   /etc/execwall/policy.yaml                            │
+│  Logs:     /var/log/execwall/audit.jsonl                        │
 │                                                                │
 └───────────────────────────────────────────────────────────────┘
 ```
@@ -79,8 +79,8 @@ This guide covers the **Standard** deployment.
 SSH into your VM and run:
 
 ```bash
-# Install everything (Sentra, OpenClaw, Himalaya)
-curl -sSL https://raw.githubusercontent.com/sundarsub/sentra/main/scripts/install-oracle-cloud.sh | sudo bash
+# Install everything (Execwall, OpenClaw, Himalaya)
+curl -sSL https://raw.githubusercontent.com/sundarsub/execwall/main/scripts/install-oracle-cloud.sh | sudo bash
 ```
 
 Or with pre-configured credentials:
@@ -92,13 +92,13 @@ export GMAIL_ADDRESS="your-email@gmail.com"
 export GMAIL_APP_PASSWORD="xxxx xxxx xxxx xxxx"  # Gmail app password
 
 # Run installer
-curl -sSL https://raw.githubusercontent.com/sundarsub/sentra/main/scripts/install-oracle-cloud.sh | sudo -E bash
+curl -sSL https://raw.githubusercontent.com/sundarsub/execwall/main/scripts/install-oracle-cloud.sh | sudo -E bash
 ```
 
 ### 3. Start OpenClaw
 
 ```bash
-# Start with Sentra (quiet mode - no banner noise)
+# Start with Execwall (quiet mode - no banner noise)
 openclaw-start
 
 # Or use systemd service
@@ -118,7 +118,7 @@ When OpenClaw starts, a QR code appears. Scan it with WhatsApp mobile:
 
 ```bash
 # Send a test email
-email "recipient@example.com" "Test Subject" "Hello from Sentra!"
+email "recipient@example.com" "Test Subject" "Hello from Execwall!"
 ```
 
 ## Build from Source
@@ -127,22 +127,22 @@ If pre-built binaries don't work (GLIBC issues), build from source:
 
 ```bash
 export BUILD_FROM_SOURCE=1
-curl -sSL https://raw.githubusercontent.com/sundarsub/sentra/main/scripts/install-oracle-cloud.sh | sudo -E bash
+curl -sSL https://raw.githubusercontent.com/sundarsub/execwall/main/scripts/install-oracle-cloud.sh | sudo -E bash
 ```
 
 ## What Gets Installed
 
 | Component | Path | Description |
 |-----------|------|-------------|
-| `sentra` | `/usr/local/bin/sentra` | Execution governance REPL (supports `--quiet`) |
-| `sentra-shell` | `/usr/local/bin/sentra-shell` | SHELL wrapper with quiet mode |
+| `execwall` | `/usr/local/bin/execwall` | Execution governance REPL (supports `--quiet`) |
+| `execwall-shell` | `/usr/local/bin/execwall-shell` | SHELL wrapper with quiet mode |
 | `email` | `/usr/local/bin/email` | Send email to any recipient |
 | `send-email` | `/usr/local/bin/send-email` | Simple email helper script |
 | `himalaya` | `/usr/local/bin/himalaya` | CLI email client (IMAP/SMTP) |
 | `openclaw` | `/usr/bin/openclaw` | AI agent gateway (npm global) |
-| `openclaw-start` | `/usr/local/bin/openclaw-start` | Start OpenClaw with Sentra |
+| `openclaw-start` | `/usr/local/bin/openclaw-start` | Start OpenClaw with Execwall |
 | `openclaw-status` | `/usr/local/bin/openclaw-status` | Check service status |
-| `policy.yaml` | `/etc/sentra/policy.yaml` | Execution policy rules |
+| `policy.yaml` | `/etc/execwall/policy.yaml` | Execution policy rules |
 
 ## Security Profiles
 
@@ -197,20 +197,20 @@ seccomp_profiles:
 
 ## Command Governance
 
-Sentra REPL enforces policy on all commands:
+Execwall REPL enforces policy on all commands:
 
 ```
-[sentra:enforce]$ ls -la
+[execwall:enforce]$ ls -la
 total 48
 drwxr-xr-x  5 opc opc 4096 Feb 24 10:00 .
 ...
 
-[sentra:enforce]$ rm -rf /
+[execwall:enforce]$ rm -rf /
 [X] DENIED: rm -rf /
   Rule:   block_rm_rf_root
   Reason: Recursive deletion of root filesystem is blocked
 
-[sentra:enforce]$ sudo su
+[execwall:enforce]$ sudo su
 [X] DENIED: sudo su
   Rule:   block_sudo
   Reason: Privilege escalation via sudo is blocked
@@ -239,10 +239,10 @@ subprocess.run(["ls"])  # BLOCKED by seccomp
 
 ```bash
 # Real-time audit log
-tail -f /var/log/sentra/audit.jsonl | jq .
+tail -f /var/log/execwall/audit.jsonl | jq .
 
 # Filter denied commands
-grep '"decision":"denied"' /var/log/sentra/audit.jsonl | jq .
+grep '"decision":"denied"' /var/log/execwall/audit.jsonl | jq .
 ```
 
 ### Check Process Status
@@ -251,7 +251,7 @@ grep '"decision":"denied"' /var/log/sentra/audit.jsonl | jq .
 # OpenClaw processes
 ps aux | grep openclaw
 
-# Sentra status
+# Execwall status
 systemctl status openclaw-firewall
 ```
 
@@ -308,20 +308,20 @@ openclaw_launcher --no-seccomp ...
 
 ```bash
 # Check which rule is blocking
-sentra --verbose
+execwall --verbose
 
 # Test command evaluation
-echo "your-command" | sentra --policy /etc/sentra/policy.yaml
+echo "your-command" | execwall --policy /etc/execwall/policy.yaml
 
 # Edit policy
-sudo vim /etc/sentra/policy.yaml
+sudo vim /etc/execwall/policy.yaml
 ```
 
 ## Updating
 
 ```bash
-# Update Sentra components
-curl -sSL https://raw.githubusercontent.com/sundarsub/sentra/main/scripts/install-oracle-cloud.sh | sudo bash
+# Update Execwall components
+curl -sSL https://raw.githubusercontent.com/sundarsub/execwall/main/scripts/install-oracle-cloud.sh | sudo bash
 
 # Update OpenClaw
 sudo npm update -g openclaw
@@ -335,13 +335,13 @@ sudo systemctl stop openclaw-firewall
 sudo systemctl disable openclaw-firewall
 
 # Remove binaries
-sudo rm -f /usr/local/bin/sentra
+sudo rm -f /usr/local/bin/execwall
 sudo rm -f /usr/local/bin/openclaw_launcher
-sudo rm -f /usr/local/bin/sentra-shell
-sudo rm -rf /usr/lib/sentra/
+sudo rm -f /usr/local/bin/execwall-shell
+sudo rm -rf /usr/lib/execwall/
 
 # Remove config
-sudo rm -rf /etc/sentra/
+sudo rm -rf /etc/execwall/
 
 # Remove OpenClaw
 sudo npm uninstall -g openclaw
@@ -352,8 +352,8 @@ rm -rf ~/.openclaw/
 
 1. **API Keys**: Store API keys in environment variables, not in config files
 2. **Firewall**: Only expose necessary ports (22 for SSH, optionally 18789)
-3. **Updates**: Regularly update Sentra and OpenClaw for security patches
-4. **Audit Logs**: Monitor `/var/log/sentra/audit.jsonl` for suspicious activity
+3. **Updates**: Regularly update Execwall and OpenClaw for security patches
+4. **Audit Logs**: Monitor `/var/log/execwall/audit.jsonl` for suspicious activity
 5. **WhatsApp**: Use a dedicated phone number for the bot
 
 ## Cost (Oracle Cloud Free Tier)
@@ -367,5 +367,5 @@ rm -rf ~/.openclaw/
 
 ## Support
 
-- GitHub Issues: https://github.com/sundarsub/sentra/issues
-- Email: sentrahelp@gmail.com
+- GitHub Issues: https://github.com/sundarsub/execwall/issues
+- Email: execwallhelp@gmail.com

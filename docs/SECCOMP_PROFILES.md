@@ -1,6 +1,6 @@
 # Seccomp Profiles for Secure Operations
 
-Sentra includes configurable seccomp-BPF profiles that restrict system calls at the kernel level. This document describes the available profiles and their security characteristics.
+Execwall includes configurable seccomp-BPF profiles that restrict system calls at the kernel level. This document describes the available profiles and their security characteristics.
 
 ## Current Configuration
 
@@ -12,7 +12,7 @@ The default deployment uses the **gateway** profile, which is designed for secur
 |---------|--------|-------|
 | WhatsApp connectivity | Allowed | WebSocket/HTTPS to WhatsApp servers |
 | Telegram connectivity | Allowed | HTTPS to Telegram API |
-| Process spawning | Blocked | No fork/exec except via Sentra |
+| Process spawning | Blocked | No fork/exec except via Execwall |
 | Direct network access | Blocked | Must go through approved channels |
 | Filesystem access | Restricted | Policy-controlled paths only |
 | Privilege escalation | Blocked | No sudo, setuid, capability changes |
@@ -32,7 +32,7 @@ Permissive profile for the OpenClaw gateway process. Allows subprocess creation 
 - `kexec_load`, `kexec_file_load` - No kernel replacement
 - `reboot` - No system reboot
 
-**Use case:** OpenClaw gateway process with Sentra policy enforcement.
+**Use case:** OpenClaw gateway process with Execwall policy enforcement.
 
 ### 2. `base_restricted`
 
@@ -94,7 +94,7 @@ Most restrictive profile - no network access except localhost.
 
 **Network policy:**
 ```yaml
-allow_loopback: true  # For Sentra API only
+allow_loopback: true  # For Execwall API only
 allow_outbound: []    # No external network
 ```
 
@@ -127,21 +127,21 @@ openclaw_launcher --seccomp-profile whatsapp_agent openclaw
 launcher:
   default_profile: gateway
 
-  sentra:
+  execwall:
     enabled: true
     mode: repl
-    binary: /usr/local/bin/sentra
-    shell_wrapper: /usr/local/bin/sentra-shell
+    binary: /usr/local/bin/execwall
+    shell_wrapper: /usr/local/bin/execwall-shell
 ```
 
 ## Security Recommendations
 
-1. **Production deployments** should use `gateway` profile with Sentra policy enforcement
+1. **Production deployments** should use `gateway` profile with Execwall policy enforcement
 2. **Code execution sandboxes** should use `isolated_agent` or `base_restricted`
 3. **Never use `development` profile** in production
-4. **Combine with Sentra policies** for defense-in-depth:
+4. **Combine with Execwall policies** for defense-in-depth:
    - Seccomp blocks at kernel level (syscall filtering)
-   - Sentra blocks at command level (policy rules)
+   - Execwall blocks at command level (policy rules)
 
 ## Limitations
 

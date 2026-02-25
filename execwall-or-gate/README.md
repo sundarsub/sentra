@@ -1,10 +1,10 @@
-# Sentra OR Gate
+# Execwall OR Gate
 
 Budget-based model routing proxy for OpenRouter.
 
 ```
 ┌──────────┐     ┌──────────────┐     ┌────────────┐
-│ OpenClaw │────▶│ Sentra OR    │────▶│ OpenRouter │
+│ OpenClaw │────▶│ Execwall OR    │────▶│ OpenRouter │
 │ (Agent)  │     │ Gate :8080   │     │            │
 └──────────┘     └──────────────┘     └────────────┘
                         │
@@ -27,7 +27,7 @@ Budget-based model routing proxy for OpenRouter.
 ### 1. Install dependencies
 
 ```bash
-pip install -r sentra-or-gate/requirements.txt
+pip install -r execwall-or-gate/requirements.txt
 ```
 
 ### 2. Set OpenRouter API key
@@ -39,7 +39,7 @@ export OPENROUTER_API_KEY="your-key-here"
 ### 3. Run the gate
 
 ```bash
-python -m sentra-or-gate.main
+python -m execwall-or-gate.main
 ```
 
 ### 4. Send requests
@@ -124,7 +124,7 @@ cost_routing:
 
 ### Response Metadata
 
-Responses include `_sentra` metadata:
+Responses include `_execwall` metadata:
 
 ```json
 {
@@ -132,7 +132,7 @@ Responses include `_sentra` metadata:
   "model": "anthropic/claude-3.5-sonnet",
   "choices": [...],
   "usage": {"total_tokens": 100, "cost": 0.0015},
-  "_sentra": {
+  "_execwall": {
     "agent_id": "agent-1",
     "cost": 0.0015,
     "budget_remaining": 49.9985,
@@ -148,7 +148,7 @@ For testing without real API calls, use the included mock OpenRouter server.
 ### Terminal 1: Start mock server
 
 ```bash
-python -m sentra-or-gate.mock_openrouter
+python -m execwall-or-gate.mock_openrouter
 ```
 
 Mock server runs on port 9000 and logs all requests to `openrouter_requests.log`.
@@ -166,7 +166,7 @@ openrouter:
 Then start the gate:
 
 ```bash
-OPENROUTER_API_KEY="test-key" python -m sentra-or-gate.main
+OPENROUTER_API_KEY="test-key" python -m execwall-or-gate.main
 ```
 
 ### Terminal 3: Run tests
@@ -226,14 +226,14 @@ Shows exactly what was sent to OpenRouter:
 
 ## Architecture with OpenClaw
 
-When running with Sentra's seccomp-locked OpenClaw:
+When running with Execwall's seccomp-locked OpenClaw:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    LOOPBACK (127.0.0.1)                     │
 │                                                             │
 │  ┌──────────┐                                               │
-│  │ OpenClaw │──┬──▶ Sentra      :9999  (code execution)     │
+│  │ OpenClaw │──┬──▶ Execwall      :9999  (code execution)     │
 │  │ (locked) │  │                                            │
 │  └──────────┘  └──▶ OR Gate     :8080  (LLM requests)       │
 │                                                             │
