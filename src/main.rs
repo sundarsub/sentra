@@ -553,10 +553,16 @@ fn run_single_command(args: &Args, command: &str) {
             &cwd,
             Decision::Denied,
             Some("rate_limit".to_string()),
-            Some(format!("Rate limit exceeded. Try again in {} seconds", wait_secs)),
+            Some(format!(
+                "Rate limit exceeded. Try again in {} seconds",
+                wait_secs
+            )),
             Instant::now(),
         );
-        eprintln!("execwall: rate limit exceeded, try again in {} seconds", wait_secs);
+        eprintln!(
+            "execwall: rate limit exceeded, try again in {} seconds",
+            wait_secs
+        );
         std::process::exit(1);
     }
 
