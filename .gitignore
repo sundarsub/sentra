@@ -41,3 +41,4 @@ __pycache__/
 # Local policy variations
 /policies/
 secrets.env
+.claude/
