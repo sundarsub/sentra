@@ -1,0 +1,27 @@
+#!/bin/bash
+# Store a note in memory (SQLite)
+# Usage: remember <content> [tags]
+
+DB="${AGENTEXW_DB:-/var/lib/execwall/agent_memory.db}"
+
+CONTENT="$1"
+TAGS="$2"
+
+if [ -z "$CONTENT" ]; then
+    echo '{"error": "Usage: remember <content> [tags]"}'
+    exit 1
+fi
+
+# Escape single quotes for SQL
+CONTENT_ESCAPED="${CONTENT//\'/\'\'}"
+TAGS_ESCAPED="${TAGS//\'/\'\'}"
+
+sqlite3 "$DB" "INSERT INTO notes (content, tags) VALUES ('$CONTENT_ESCAPED', '$TAGS_ESCAPED');"
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "{\"success\": true, \"stored\": \"$CONTENT\"}"
+else
+    echo "{\"error\": \"Failed to store note\"}"
+    exit 1
+fi

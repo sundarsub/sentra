@@ -1,0 +1,7 @@
+#!/bin/bash
+# Calendar list via gcal (gcsa-based)
+# Usage: cal_list [days]
+
+DAYS="${1:-7}"
+
+~/.local/bin/gcal list "$DAYS" 2>&1

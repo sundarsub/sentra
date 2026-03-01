@@ -1,0 +1,25 @@
+#!/bin/bash
+# WhatsApp send via wacli
+# Usage: wa_send <phone> <message>
+
+PHONE="${1:-$WA_TO}"
+MSG="${2:-$WA_MESSAGE}"
+
+if [ -z "$PHONE" ] || [ -z "$MSG" ]; then
+    echo '{"error": "Usage: wa_send <phone> <message>"}'
+    exit 1
+fi
+
+# Remove + prefix if present (wacli prefers without)
+PHONE="${PHONE#+}"
+
+# Send via wacli
+RESULT=$(wacli send text --to "$PHONE" --message "$MSG" --timeout 30s 2>&1)
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "{\"success\": true, \"to\": \"$PHONE\"}"
+else
+    echo "{\"error\": \"$RESULT\"}"
+    exit 1
+fi

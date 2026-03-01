@@ -26,6 +26,26 @@ path = "src/bin/python_runner.rs"
 name = "openclaw_launcher"
 path = "src/bin/openclaw_launcher.rs"
 
+[[bin]]
+name = "agentexw"
+path = "src/bin/agentexw.rs"
+
+[[bin]]
+name = "agentexw-listener"
+path = "src/bin/agentexw_listener.rs"
+
+[[bin]]
+name = "whatsapp-svc"
+path = "src/bin/whatsapp_svc.rs"
+
+[[bin]]
+name = "email-svc"
+path = "src/bin/email_svc.rs"
+
+[[bin]]
+name = "calendar-svc"
+path = "src/bin/calendar_svc.rs"
+
 [dependencies]
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -60,11 +80,19 @@ tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "io-util", 
 # NEW: Code hashing for audit
 sha2 = "0.10"
 
+# AgentExW dependencies
+rusqlite = { version = "0.31", features = ["bundled"] }
+notify = "6.1"
+signal-hook = "0.3"
+ureq = { version = "2.9", features = ["json"] }
+
 [target.'cfg(target_os = "linux")'.dependencies]
 # Sandbox infrastructure (Linux-only)
 nix = { version = "0.28", features = ["mount", "sched", "signal", "process", "user", "fs"] }
 caps = "0.5"
 libseccomp = "0.3"
+# Systemd watchdog support
+sd-notify = "0.4"
 
 [dev-dependencies]
 tempfile = "3.10"

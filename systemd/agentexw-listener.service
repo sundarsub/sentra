@@ -1,0 +1,32 @@
+[Unit]
+Description=AgentExW Message Listener
+Documentation=https://github.com/sundarsub/execwall
+After=network.target agentexw.service
+BindsTo=agentexw.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/agentexw-listener --policy /etc/execwall/policy.yaml --db /var/lib/execwall/agent_memory.db -v
+Restart=always
+RestartSec=5
+
+# Security hardening
+User=execwall
+Group=execwall
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+ReadWritePaths=/var/lib/execwall
+ReadOnlyPaths=/etc/execwall
+
+# Resource limits
+MemoryMax=256M
+CPUQuota=25%
+TasksMax=32
+
+# Environment
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target

@@ -303,6 +303,19 @@ pub struct PolicyEngine {
     pub syscall_profiles: HashMap<String, SyscallProfile>,
 }
 
+impl Default for PolicyEngine {
+    fn default() -> Self {
+        Self {
+            policy: Policy::default(),
+            compiled_rules: Vec::new(),
+            version: "1.0".to_string(),
+            profiles: HashMap::new(),
+            capabilities: HashMap::new(),
+            syscall_profiles: HashMap::new(),
+        }
+    }
+}
+
 impl PolicyEngine {
     /// Load and compile a policy from a YAML file
     pub fn load_from_file(path: &str) -> Result<Self, String> {
@@ -498,6 +511,16 @@ impl PolicyEngine {
     /// Get a capability by name (v2.0)
     pub fn get_capability(&self, name: &str) -> Option<&Capability> {
         self.capabilities.get(name)
+    }
+
+    /// Get the number of sandbox profiles loaded
+    pub fn profile_count(&self) -> usize {
+        self.profiles.len()
+    }
+
+    /// List all available profile names
+    pub fn list_profiles(&self) -> Vec<&str> {
+        self.profiles.keys().map(|s| s.as_str()).collect()
     }
 }
 

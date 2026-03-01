@@ -1,0 +1,21 @@
+[Unit]
+Description=Email Event Service for AgentExW
+After=network.target
+
+[Service]
+Type=simple
+User=opc
+Group=opc
+ExecStart=/usr/local/bin/email-svc
+Restart=always
+RestartSec=5
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/execwall
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,7 @@
+#!/bin/bash
+# Check recent emails via himalaya
+# Usage: email_check [count]
+
+COUNT="${1:-5}"
+
+himalaya envelope list -f INBOX -w "$COUNT" -o json 2>&1

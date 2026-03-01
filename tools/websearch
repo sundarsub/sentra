@@ -1,0 +1,12 @@
+#!/bin/bash
+# Web search via Tavily
+# Usage: websearch <query>
+
+QUERY="$*"
+
+if [ -z "$QUERY" ]; then
+    echo '{"error": "Usage: websearch <query>"}'
+    exit 1
+fi
+
+~/.local/bin/websearch "$QUERY" 2>&1

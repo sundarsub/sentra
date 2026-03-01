@@ -1,0 +1,28 @@
+#!/bin/bash
+# Add a task to the todo list (SQLite)
+# Usage: add_task <content> [due] [priority]
+
+DB="${AGENTEXW_DB:-/var/lib/execwall/agent_memory.db}"
+
+CONTENT="$1"
+DUE="$2"
+PRIORITY="${3:-0}"
+
+if [ -z "$CONTENT" ]; then
+    echo '{"error": "Usage: add_task <content> [due] [priority]"}'
+    exit 1
+fi
+
+# Escape single quotes for SQL
+CONTENT_ESCAPED="${CONTENT//\'/\'\'}"
+DUE_ESCAPED="${DUE//\'/\'\'}"
+
+sqlite3 "$DB" "INSERT INTO tasks (content, due, priority, source) VALUES ('$CONTENT_ESCAPED', '$DUE_ESCAPED', $PRIORITY, 'agent');"
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "{\"success\": true, \"task\": \"$CONTENT\"}"
+else
+    echo "{\"error\": \"Failed to add task\"}"
+    exit 1
+fi

@@ -1,0 +1,27 @@
+#!/bin/bash
+# Set a reminder (SQLite)
+# Usage: add_reminder <content> <due>
+
+DB="${AGENTEXW_DB:-/var/lib/execwall/agent_memory.db}"
+
+CONTENT="$1"
+DUE="$2"
+
+if [ -z "$CONTENT" ] || [ -z "$DUE" ]; then
+    echo '{"error": "Usage: add_reminder <content> <due>"}'
+    exit 1
+fi
+
+# Escape single quotes for SQL
+CONTENT_ESCAPED="${CONTENT//\'/\'\'}"
+DUE_ESCAPED="${DUE//\'/\'\'}"
+
+sqlite3 "$DB" "INSERT INTO reminders (content, due) VALUES ('$CONTENT_ESCAPED', '$DUE_ESCAPED');"
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "{\"success\": true, \"reminder\": \"$CONTENT\", \"due\": \"$DUE\"}"
+else
+    echo "{\"error\": \"Failed to add reminder\"}"
+    exit 1
+fi

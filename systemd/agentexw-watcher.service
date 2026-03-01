@@ -1,0 +1,12 @@
+[Unit]
+Description=AgentExW Event Watcher - Triggers agent on new events
+After=agentexw.service
+BindsTo=agentexw.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl reload agentexw.service
+ExecStartPost=/bin/rm -f /var/lib/execwall/events/wake
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+#!/bin/bash
+# Search notes in memory (SQLite)
+# Usage: recall [query]
+
+DB="${AGENTEXW_DB:-/var/lib/execwall/agent_memory.db}"
+
+QUERY="$1"
+
+if [ -z "$QUERY" ]; then
+    # List recent notes
+    sqlite3 -json "$DB" "SELECT id, content, tags, created_at FROM notes ORDER BY created_at DESC LIMIT 10;"
+else
+    # Search notes
+    QUERY_ESCAPED="${QUERY//\'/\'\'}"
+    sqlite3 -json "$DB" "SELECT id, content, tags, created_at FROM notes WHERE content LIKE '%$QUERY_ESCAPED%' OR tags LIKE '%$QUERY_ESCAPED%' ORDER BY created_at DESC LIMIT 10;"
+fi

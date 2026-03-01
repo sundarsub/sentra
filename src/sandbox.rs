@@ -193,39 +193,35 @@ impl SandboxExecutor {
     }
 
     /// Execute code in full sandbox (Linux)
-    /// Note: cgroup resource limits disabled pending module resolution fix
+    /// Uses python_runner binary which applies namespace isolation, seccomp, and privilege dropping
     #[cfg(target_os = "linux")]
     pub fn execute(
         &self,
         request: &SandboxRequest,
     ) -> Result<SandboxResponse, Box<dyn std::error::Error>> {
-        use std::io::Read;
+        use std::io::{Read, Write};
         use std::process::{Command, Stdio};
 
         let start = Instant::now();
-        let code_hash = request.code_hash();
 
-        // Write code to temp file
-        let temp_dir = std::env::temp_dir();
-        let code_path = temp_dir.join(format!("execwall_{}.py", uuid::Uuid::new_v4()));
-        std::fs::write(&code_path, &request.code)?;
+        // Serialize the request to JSON for python_runner
+        let request_json = serde_json::to_string(request)?;
 
-        // Execute Python with output capture
-        let mut child = Command::new("python3")
-            .arg("-u")
-            .arg("-B")
-            .arg(&code_path)
-            .current_dir(&request.cwd)
-            .env_clear()
-            .env("HOME", "/work")
-            .env("PATH", "/usr/bin:/bin")
-            .env("PYTHONPATH", "")
+        // Execute python_runner binary which handles sandbox isolation
+        let mut child = Command::new(&self.python_runner_path)
+            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .spawn()?;
+            .spawn()
+            .map_err(|e| format!("Failed to spawn python_runner at {}: {}", self.python_runner_path, e))?;
 
-        // Wait with timeout
-        let timeout = Duration::from_secs(request.timeout_sec);
+        // Write request JSON to stdin
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(request_json.as_bytes())?;
+        }
+
+        // Wait with timeout (parent-level timeout as backup)
+        let timeout = Duration::from_secs(request.timeout_sec + 5); // Extra buffer for runner overhead
         let mut timed_out = false;
 
         let status = loop {
@@ -243,49 +239,58 @@ impl SandboxExecutor {
             }
         };
 
-        let wall_time = start.elapsed();
-
-        // Read output
-        let mut stdout = String::new();
-        let mut stderr = String::new();
-
+        // Read stdout - should contain SandboxResponse JSON
+        let mut stdout_raw = String::new();
         if let Some(mut out) = child.stdout.take() {
-            let mut buf = vec![0u8; request.max_stdout_bytes + 1];
-            let n = out.read(&mut buf).unwrap_or(0);
-            stdout = String::from_utf8_lossy(&buf[..n.min(request.max_stdout_bytes)]).to_string();
+            out.read_to_string(&mut stdout_raw)?;
         }
+
+        // Read stderr for any runner errors
+        let mut stderr_raw = String::new();
         if let Some(mut err) = child.stderr.take() {
-            let mut buf = vec![0u8; request.max_stderr_bytes + 1];
-            let n = err.read(&mut buf).unwrap_or(0);
-            stderr = String::from_utf8_lossy(&buf[..n.min(request.max_stderr_bytes)]).to_string();
+            err.read_to_string(&mut stderr_raw)?;
         }
 
-        let truncated_stdout = stdout.len() >= request.max_stdout_bytes;
-        let truncated_stderr = stderr.len() >= request.max_stderr_bytes;
+        // If runner exited cleanly, parse its JSON response
+        if status.success() || !stdout_raw.is_empty() {
+            // Try to parse the response from python_runner
+            if let Ok(response) = serde_json::from_str::<SandboxResponse>(&stdout_raw) {
+                return Ok(response);
+            }
 
-        if truncated_stdout {
-            stdout.push_str("\n[TRUNCATED]");
+            // Check for error response format
+            if let Ok(error_resp) = serde_json::from_str::<serde_json::Value>(&stdout_raw) {
+                if let Some(error) = error_resp.get("error").and_then(|e| e.as_str()) {
+                    return Ok(SandboxResponse {
+                        exit_code: status.code().unwrap_or(-1),
+                        stdout: String::new(),
+                        stderr: error.to_string(),
+                        wall_time_ms: start.elapsed().as_millis() as u64,
+                        peak_mem_mb: 0,
+                        code_sha256: request.code_hash(),
+                        timed_out,
+                        truncated_stdout: false,
+                        truncated_stderr: false,
+                    });
+                }
+            }
         }
-        if truncated_stderr {
-            stderr.push_str("\n[TRUNCATED]");
-        }
 
-        // Peak memory not available without cgroups
-        let peak_mem_mb = 0;
-
-        // Cleanup
-        let _ = std::fs::remove_file(&code_path);
-
+        // Fallback: runner failed or returned invalid output
         Ok(SandboxResponse {
             exit_code: status.code().unwrap_or(-1),
-            stdout,
-            stderr,
-            wall_time_ms: wall_time.as_millis() as u64,
-            peak_mem_mb,
-            code_sha256: code_hash,
+            stdout: stdout_raw,
+            stderr: if timed_out {
+                format!("Parent timeout after {} seconds. {}", request.timeout_sec + 5, stderr_raw)
+            } else {
+                stderr_raw
+            },
+            wall_time_ms: start.elapsed().as_millis() as u64,
+            peak_mem_mb: 0,
+            code_sha256: request.code_hash(),
             timed_out,
-            truncated_stdout,
-            truncated_stderr,
+            truncated_stdout: false,
+            truncated_stderr: false,
         })
     }
 }
