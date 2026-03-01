@@ -1,11 +1,11 @@
-pub mod api;
 pub mod audit;
 pub mod cgroup;
-pub mod context;
 pub mod namespace;
 pub mod policy;
 pub mod rate_limit;
 pub mod sandbox;
 pub mod seccomp;
 pub mod seccomp_profile;
-pub mod user;
+
+// API module (to be implemented in later tasks)
+// pub mod api;

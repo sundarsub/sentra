@@ -1,13 +1,10 @@
 //! JSON API mode for Execwall
 //!
 //! Provides a TCP server that accepts JSON requests for sandbox execution.
-//! Loads configuration from policy.yaml for profile-based sandbox settings.
 
-use crate::policy::PolicyEngine;
 use crate::sandbox::{SandboxExecutor, SandboxRequest, SandboxResponse};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -90,28 +87,14 @@ pub struct ApiError {
 pub struct ApiServer {
     port: u16,
     executor: SandboxExecutor,
-    policy: Arc<PolicyEngine>,
 }
 
 impl ApiServer {
-    /// Create a new API server with policy configuration
-    pub fn new(port: u16, python_runner_path: &str, policy_path: &str) -> Result<Self, String> {
-        let policy = PolicyEngine::load_from_file(policy_path)
-            .map_err(|e| format!("Failed to load policy from {}: {}", policy_path, e))?;
-
-        Ok(Self {
-            port,
-            executor: SandboxExecutor::new(python_runner_path),
-            policy: Arc::new(policy),
-        })
-    }
-
-    /// Create API server with pre-loaded policy
-    pub fn with_policy(port: u16, python_runner_path: &str, policy: PolicyEngine) -> Self {
+    /// Create a new API server
+    pub fn new(port: u16, python_runner_path: &str) -> Self {
         Self {
             port,
             executor: SandboxExecutor::new(python_runner_path),
-            policy: Arc::new(policy),
         }
     }
 
@@ -121,8 +104,7 @@ impl ApiServer {
         let listener = TcpListener::bind(&addr).await?;
 
         println!("Execwall API server listening on {}", addr);
-        println!("Policy loaded with {} profiles", self.policy.profile_count());
-        println!("Send JSON requests with format: {{\"code\": \"...\", \"profile\": \"python_sandbox_v1\"}}");
+        println!("Send JSON requests with format: {{\"code\": \"...\", \"profile\": \"python_sandbox\"}}");
         println!("Press Ctrl+C to stop the server");
 
         loop {
@@ -131,9 +113,8 @@ impl ApiServer {
                     println!("Connection from: {}", peer_addr);
                     // Clone what we need for the async task
                     let python_runner_path = self.executor.python_runner_path().to_string();
-                    let policy = Arc::clone(&self.policy);
                     tokio::spawn(async move {
-                        if let Err(e) = handle_connection(socket, &python_runner_path, &policy).await {
+                        if let Err(e) = handle_connection(socket, &python_runner_path).await {
                             eprintln!("Error handling connection from {}: {}", peer_addr, e);
                         }
                     });
@@ -150,7 +131,6 @@ impl ApiServer {
 async fn handle_connection(
     socket: TcpStream,
     python_runner_path: &str,
-    policy: &PolicyEngine,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (reader, mut writer) = socket.into_split();
     let mut reader = BufReader::new(reader);
@@ -162,7 +142,7 @@ async fn handle_connection(
         return Ok(()); // Connection closed
     }
 
-    let response_json = match process_request(&line, python_runner_path, policy) {
+    let response_json = match process_request(&line, python_runner_path) {
         Ok(response) => serde_json::to_string(&response)?,
         Err(error) => serde_json::to_string(&error)?,
     };
@@ -176,11 +156,7 @@ async fn handle_connection(
 }
 
 /// Process a JSON request and return a response
-fn process_request(
-    request_json: &str,
-    python_runner_path: &str,
-    policy: &PolicyEngine,
-) -> Result<ApiResponse, ApiError> {
+fn process_request(request_json: &str, python_runner_path: &str) -> Result<ApiResponse, ApiError> {
     // Parse the request
     let api_request: ApiRequest = serde_json::from_str(request_json).map_err(|e| ApiError {
         error: format!("Invalid JSON request: {}", e),
@@ -195,33 +171,11 @@ fn process_request(
         });
     }
 
-    // Build SandboxRequest starting with defaults
+    // Build SandboxRequest
     let mut sandbox_request = SandboxRequest::default();
     sandbox_request.code = api_request.code;
-    sandbox_request.profile = api_request.profile.clone();
+    sandbox_request.profile = api_request.profile;
 
-    // Look up profile from policy and apply its settings
-    if let Some(profile) = policy.get_profile(&api_request.profile) {
-        // Apply filesystem defaults from profile
-        sandbox_request.cwd = profile.fs_defaults.cwd.clone();
-        sandbox_request.fs_read_allow = profile.fs_defaults.read_allow.clone();
-        sandbox_request.fs_write_allow = profile.fs_defaults.write_allow.clone();
-
-        // Apply limits from profile
-        sandbox_request.timeout_sec = profile.limits_defaults.timeout_sec;
-        sandbox_request.mem_max_mb = profile.limits_defaults.mem_max_mb;
-        sandbox_request.pids_max = profile.limits_defaults.pids_max;
-        sandbox_request.max_stdout_bytes = profile.limits_defaults.max_stdout_bytes;
-        sandbox_request.max_stderr_bytes = profile.limits_defaults.max_stderr_bytes;
-    } else {
-        // Profile not found - log warning but continue with defaults
-        eprintln!(
-            "Warning: Profile '{}' not found in policy, using defaults",
-            api_request.profile
-        );
-    }
-
-    // Override with any explicit request parameters (request takes precedence)
     if let Some(cwd) = api_request.cwd {
         sandbox_request.cwd = cwd;
     }
@@ -238,7 +192,7 @@ fn process_request(
         sandbox_request.env = env;
     }
 
-    // Execute in sandbox using python_runner
+    // Execute in sandbox
     let executor = SandboxExecutor::new(python_runner_path);
     let result = executor.execute(&sandbox_request).map_err(|e| ApiError {
         error: format!("Execution failed: {}", e),
@@ -301,9 +255,8 @@ mod tests {
 
     #[test]
     fn test_process_request_empty_code() {
-        let policy = PolicyEngine::default();
         let json = r#"{"code": ""}"#;
-        let result = process_request(json, "/usr/lib/execwall/python_runner", &policy);
+        let result = process_request(json, "/usr/lib/execwall/python_runner");
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(err.code, "EMPTY_CODE");
@@ -311,9 +264,8 @@ mod tests {
 
     #[test]
     fn test_process_request_invalid_json() {
-        let policy = PolicyEngine::default();
         let json = "not valid json";
-        let result = process_request(json, "/usr/lib/execwall/python_runner", &policy);
+        let result = process_request(json, "/usr/lib/execwall/python_runner");
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(err.code, "INVALID_JSON");

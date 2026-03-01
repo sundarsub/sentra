@@ -4,41 +4,20 @@
 //! It receives a SandboxRequest via stdin, applies sandbox restrictions,
 //! executes the Python code, and returns results via stdout as JSON.
 //!
-//! Configuration is loaded from policy.yaml (same file as execwall shell and API).
-//!
 //! Security flow:
-//! 1. Load policy.yaml for profile configuration (if --policy specified)
-//! 2. Receive SandboxRequest JSON from parent via stdin
-//! 3. Apply namespace isolation (Linux only)
-//! 4. Apply seccomp-bpf syscall filter based on profile's syscall_profile (Linux only)
-//! 5. Drop privileges
-//! 6. Execute Python code
-//! 7. Return SandboxResponse JSON via stdout
+//! 1. Receive SandboxRequest JSON from parent via stdin
+//! 2. Apply namespace isolation (Linux only)
+//! 3. Apply seccomp-bpf syscall filter (Linux only)
+//! 4. Drop privileges
+//! 5. Execute Python code
+//! 6. Return SandboxResponse JSON via stdout
 
 use std::collections::HashMap;
 use std::io::{self, Read};
 use std::process::{Command, Stdio};
 use std::time::Instant;
 
-use clap::Parser;
 use serde::{Deserialize, Serialize};
-
-use execwall::policy::PolicyEngine;
-
-/// Python Sandbox Runner - Isolated Python Execution
-#[derive(Parser, Debug)]
-#[command(name = "python_runner")]
-#[command(version)]
-#[command(about = "Execute Python code in isolated sandbox")]
-struct Args {
-    /// Path to policy.yaml file for profile configuration
-    #[arg(long, default_value = "/etc/execwall/policy.yaml")]
-    policy: String,
-
-    /// Verbose output (to stderr)
-    #[arg(short, long)]
-    verbose: bool,
-}
 
 /// Request to execute code in sandbox (mirrored from sandbox.rs for binary use)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,10 +77,8 @@ pub struct ErrorResponse {
 }
 
 fn main() {
-    let args = Args::parse();
-
     // Run the main logic and handle any errors
-    match run(&args) {
+    match run() {
         Ok(response) => {
             // Output successful response as JSON to stdout
             let json = serde_json::to_string(&response).unwrap_or_else(|e| {
@@ -123,37 +100,15 @@ fn main() {
     }
 }
 
-fn run(args: &Args) -> Result<SandboxResponse, Box<dyn std::error::Error>> {
-    // Step 1: Load policy.yaml for profile configuration
-    let policy = PolicyEngine::load_from_file(&args.policy).ok();
-    if args.verbose {
-        if let Some(ref p) = policy {
-            eprintln!("python_runner: Loaded policy with {} profiles", p.profile_count());
-        } else {
-            eprintln!("python_runner: No policy loaded, using request defaults");
-        }
-    }
+fn run() -> Result<SandboxResponse, Box<dyn std::error::Error>> {
+    // Step 1: Read SandboxRequest JSON from stdin
+    let request = read_request_from_stdin()?;
 
-    // Step 2: Read SandboxRequest JSON from stdin
-    let mut request = read_request_from_stdin()?;
-
-    // Step 3: If policy loaded, look up profile and apply any additional settings
-    if let Some(ref policy) = policy {
-        if let Some(profile) = policy.get_profile(&request.profile) {
-            if args.verbose {
-                eprintln!("python_runner: Using profile '{}' with syscall_profile '{}'",
-                    request.profile, profile.syscall_profile);
-            }
-            // Profile settings from YAML can override/augment request
-            // (request already has settings from API, but profile may have syscall info)
-        }
-    }
-
-    // Step 4: Apply namespace isolation (Linux only)
+    // Step 2: Apply namespace isolation (Linux only)
     #[cfg(target_os = "linux")]
     apply_namespace_isolation(&request)?;
 
-    // Step 5: Apply seccomp-bpf filter (Linux only)
+    // Step 3: Apply seccomp-bpf filter (Linux only)
     // Note: We do NOT apply seccomp here because we need to call execve for Python
     // The seccomp filter would block execve. Instead, seccomp should be applied
     // by Python code itself or we use a different approach.

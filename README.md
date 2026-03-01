@@ -91,10 +91,11 @@ See the full [Oracle Cloud Deployment Guide](docs/ORACLE_CLOUD_DEPLOYMENT.md) fo
 - **Filesystem isolation**: Read-only system paths, restricted write paths
 - **Network blocking**: Complete network isolation by default
 
-### JSON API Mode
-- **TCP server** for programmatic access (ideal for VM integration)
-- **JSON request/response protocol** for code execution
-- **Profile-based configuration** for different security levels
+### Unified JSON API Mode (v2.0)
+- **TCP server** for programmatic access (ideal for VM and agent integration)
+- **Dual-mode API**: Both sandboxed Python execution AND policy-governed command execution
+- **Identity-scoped commands**: Per-agent/per-user policy enforcement
+- **Profile-based sandbox configuration** for different security levels
 - **Async execution** with timeout and resource tracking
 
 ### Audit Logging with Code Hashing
@@ -235,7 +236,28 @@ Response:
 }
 ```
 
-API Request Format:
+**NEW in v2.0: Execute shell commands with policy enforcement:**
+
+```bash
+# Execute a command (policy-governed)
+echo '{"command": "ls -la /tmp", "identity": "myagent"}' | nc localhost 9800
+```
+
+Command Response:
+```json
+{
+  "exit_code": 0,
+  "stdout": "total 8\ndrwxrwxrwt 2 root root 4096 ...",
+  "stderr": "",
+  "wall_time_ms": 12,
+  "allowed_by_policy": true,
+  "audit_mode": false,
+  "matched_rule": "allow_ls",
+  "reason": null
+}
+```
+
+**Sandbox Request Format** (Python execution):
 ```json
 {
   "code": "import math; print(math.pi)",
@@ -249,6 +271,22 @@ API Request Format:
   }
 }
 ```
+
+**Command Request Format** (v2.0 - shell command execution):
+```json
+{
+  "command": "git status",
+  "identity": "myagent",
+  "cwd": "/home/agent/project",
+  "env": {
+    "GIT_AUTHOR_NAME": "Agent"
+  }
+}
+```
+
+The API automatically detects request type:
+- Requests with `"code"` field → Sandbox execution
+- Requests with `"command"` field → Policy-governed command execution
 
 ## OpenClaw VM Integration Guide
 
@@ -1434,6 +1472,49 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 ```
 
 See [execwall-or-gate/README.md](execwall-or-gate/README.md) for full documentation.
+
+---
+
+## AgentExW - Enterprise Autonomous AI Agent Platform
+
+Execwall powers **AgentExW**, an autonomous AI agent platform designed for enterprise deployments. AgentExW demonstrates the full capabilities of Execwall's unified API for building secure, production-grade AI agents.
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        AgentExW Agent                            │
+│  • WhatsApp, Email, Calendar integrations                        │
+│  • Polling-driven trigger processing                             │
+│  • Tool execution via execwall-shell                             │
+│  • Multi-channel response handling                               │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼ Unified JSON API
+┌─────────────────────────────────────────────────────────────────┐
+│                      Execwall Shell API                          │
+│  • Sandbox requests: {"code": "...", "profile": "..."}          │
+│  • Command requests: {"command": "...", "identity": "..."}      │
+│  • Policy evaluation with identity context                       │
+│  • Audit logging with full traceability                          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Key Features
+
+- **Multi-channel triggers**: WhatsApp messages, emails, calendar events
+- **Unified API execution**: Both Python sandbox and shell commands through execwall
+- **Identity-scoped policies**: Per-agent command governance
+- **Deterministic parsing**: Structured directives (TASK:/REMINDER:) processed before LLM
+- **Audit trail**: Complete visibility into all agent actions
+
+### Enterprise Offering
+
+AgentExW is currently a **work in progress** for enterprise deployments. The agent code is not included in this public release.
+
+**Interested in AgentExW for your organization?**
+
+Contact: **sentra@lma.llc**
 
 ---
 

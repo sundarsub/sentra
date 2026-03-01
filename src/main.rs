@@ -69,7 +69,7 @@ fn main() {
 
     // Check if we should run in API mode
     if args.api {
-        run_api_mode(args.port, &args.python_runner, &args.policy);
+        run_api_mode(args.port, &args.python_runner);
         return;
     }
 
@@ -629,7 +629,7 @@ fn run_single_command(args: &Args, command: &str) {
 }
 
 /// Run Execwall in JSON API mode
-fn run_api_mode(port: u16, python_runner_path: &str, policy_path: &str) {
+fn run_api_mode(port: u16, python_runner_path: &str) {
     println!(
         "{}",
         "╔══════════════════════════════════════════════════════════╗".cyan()
@@ -647,15 +647,8 @@ fn run_api_mode(port: u16, python_runner_path: &str, policy_path: &str) {
         "╚══════════════════════════════════════════════════════════╝".cyan()
     );
     println!();
-    println!("Loading policy from: {}", policy_path);
 
-    let server = match api::ApiServer::new(port, python_runner_path, policy_path) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("{} Failed to create API server: {}", "Error:".red(), e);
-            std::process::exit(1);
-        }
-    };
+    let server = api::ApiServer::new(port, python_runner_path);
 
     // Create tokio runtime and run the server
     let runtime = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
